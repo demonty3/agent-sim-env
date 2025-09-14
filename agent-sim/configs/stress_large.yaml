@@ -1,0 +1,10 @@
+# Stress config: larger round budget
+max_rounds: 20
+issues:
+  - { name: p1, min_value: 0.0, max_value: 1.0, weight: 0.25 }
+  - { name: p2, min_value: 0.0, max_value: 1.0, weight: 0.25 }
+  - { name: p3, min_value: 0.0, max_value: 1.0, weight: 0.25 }
+  - { name: p4, min_value: 0.0, max_value: 1.0, weight: 0.25 }
+agent_a: { name: A, reservation_value: 0.3, concession: linear, acceptance: { type: threshold, threshold: 0.55 } }
+agent_b: { name: B, reservation_value: 0.3, concession: linear, acceptance: { type: threshold, threshold: 0.55 } }
+

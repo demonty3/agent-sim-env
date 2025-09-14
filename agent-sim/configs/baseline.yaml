@@ -1,0 +1,24 @@
+# Example baseline config for a single negotiation run
+
+max_rounds: 7
+
+issues:
+  - { name: price, min_value: 0.0, max_value: 1.0, weight: 0.7 }
+  - { name: warranty, min_value: 0.0, max_value: 1.0, weight: 0.3 }
+
+agent_a:
+  name: Alice
+  reservation_value: 0.2
+  concession: linear
+  acceptance:
+    type: threshold
+    threshold: 0.6
+
+agent_b:
+  name: Bob
+  reservation_value: 0.3
+  concession: linear
+  acceptance:
+    type: threshold
+    threshold: 0.55
+

@@ -1,0 +1,8 @@
+# Stress config: small round budget
+max_rounds: 3
+issues:
+  - { name: price, min_value: 0.0, max_value: 1.0, weight: 0.5 }
+  - { name: quality, min_value: 0.0, max_value: 1.0, weight: 0.5 }
+agent_a: { name: A, reservation_value: 0.2, concession: linear, acceptance: { type: threshold, threshold: 0.6 } }
+agent_b: { name: B, reservation_value: 0.2, concession: linear, acceptance: { type: threshold, threshold: 0.6 } }
+
