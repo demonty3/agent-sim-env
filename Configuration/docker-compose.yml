@@ -1,0 +1,84 @@
+version: '3.8'
+
+services:
+  # Web interface service
+  web:
+    build: .
+    container_name: negotiation-web
+    command: streamlit run web_interface.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./configs:/app/configs
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - negotiation-network
+    restart: unless-stopped
+
+  # API service (optional)
+  api:
+    build: .
+    container_name: negotiation-api
+    command: uvicorn api:app --host 0.0.0.0 --port 8000 --reload
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./outputs:/app/outputs
+      - ./configs:/app/configs
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - negotiation-network
+    restart: unless-stopped
+
+  # Jupyter notebook service for interactive analysis
+  jupyter:
+    build: .
+    container_name: negotiation-jupyter
+    command: jupyter notebook --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''
+    ports:
+      - "8888:8888"
+    volumes:
+      - ./:/app
+    environment:
+      - PYTHONUNBUFFERED=1
+    networks:
+      - negotiation-network
+    restart: unless-stopped
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:alpine
+    container_name: negotiation-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - negotiation-network
+    restart: unless-stopped
+
+  # PostgreSQL for storing results (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: negotiation-db
+    environment:
+      - POSTGRES_DB=negotiation_db
+      - POSTGRES_USER=negotiator
+      - POSTGRES_PASSWORD=secure_password_here
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - negotiation-network
+    restart: unless-stopped
+
+networks:
+  negotiation-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
