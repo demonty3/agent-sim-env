@@ -61,7 +61,7 @@ jobs:
 
     - name: Run tests with coverage
       run: |
-        pytest tests/ -v --cov=. --cov-report=xml --cov-report=html
+        pytest -m "not slow" tests/ -v --cov=. --cov-report=xml --cov-report=html
       working-directory: negotiation-simulator
 
     - name: Upload coverage to Codecov
@@ -71,6 +71,31 @@ jobs:
         flags: unittests
         name: codecov-umbrella
         fail_ci_if_error: false
+
+  # ===== SLOW TESTS =====
+  slow-tests:
+    name: Slow Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+      working-directory: negotiation-simulator
+
+    - name: Run slow test suite
+      run: pytest tests/performance -v -m slow
+      working-directory: negotiation-simulator
 
   # ===== BENCHMARKING =====
   benchmark:
