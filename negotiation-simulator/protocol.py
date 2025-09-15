@@ -5,8 +5,9 @@ Supports simple alternating, simultaneous, and random proposer protocols.
 
 from __future__ import annotations
 
-import random
 from typing import Dict, List, Optional
+
+from numpy.random import Generator, default_rng
 
 import numpy as np
 
@@ -41,6 +42,7 @@ class NegotiationEngine:
         self.max_rounds: int = config.max_rounds
         self.protocol: str = config.protocol
         self.current_round: int = 0
+        self.rng: Generator = config.create_rng()
 
         # Transcript of rounds
         self.transcript: List[NegotiationRound] = []
@@ -63,7 +65,7 @@ class NegotiationEngine:
             self.current_round = r
             proposer = self.entities[proposer_index]
             offer_values = proposer.policy.make_offer(
-                r, self._flatten_history(), proposer.utility_function, self.issues
+                r, self._flatten_history(), proposer.utility_function, self.issues, rng=self.rng
             )
             offer = self._evaluate_offer(offer_values, proposer.name)
 
@@ -119,7 +121,7 @@ class NegotiationEngine:
             # Each entity proposes
             for entity in self.entities:
                 values = entity.policy.make_offer(
-                    r, self._flatten_history(), entity.utility_function, self.issues
+                    r, self._flatten_history(), entity.utility_function, self.issues, rng=self.rng
                 )
                 offers.append(self._evaluate_offer(values, entity.name))
 
@@ -172,9 +174,9 @@ class NegotiationEngine:
 
         for r in range(1, self.max_rounds + 1):
             self.current_round = r
-            proposer = random.choice(self.entities)
+            proposer = self.rng.choice(self.entities)
             values = proposer.policy.make_offer(
-                r, self._flatten_history(), proposer.utility_function, self.issues
+                r, self._flatten_history(), proposer.utility_function, self.issues, rng=self.rng
             )
             offer = self._evaluate_offer(values, proposer.name)
 
@@ -243,7 +245,9 @@ class NegotiationEngine:
         if success and agreement is not None:
             if getattr(self.config, "track_pareto", False):
                 try:
-                    pareto_opt = is_pareto_optimal(agreement, self.entities, self.issues, samples=100)
+                    pareto_opt = is_pareto_optimal(
+                        agreement, self.entities, self.issues, samples=100, rng=self.rng
+                    )
                 except Exception:
                     pareto_opt = None
             if getattr(self.config, "calculate_nash", False):
@@ -321,7 +325,8 @@ class BatchNegotiationRunner:
         import copy
 
         new_cfg = copy.deepcopy(config)
-        rng = random.Random(seed)
+        combined_seed = seed if config.seed is None else config.seed + seed
+        rng = default_rng(combined_seed)
 
         for entity in new_cfg.entities:
             params = entity.policy.params
@@ -332,4 +337,5 @@ class BatchNegotiationRunner:
                 delta = rng.uniform(-0.02, 0.02)
                 params.concession_rate = float(np.clip(params.concession_rate + delta, 0.0, 1.0))
 
+        new_cfg.seed = combined_seed
         return new_cfg

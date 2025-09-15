@@ -4,6 +4,7 @@ Includes Nash bargaining, Pareto optimality, and other game theory utilities.
 """
 
 import numpy as np
+from numpy.random import Generator, default_rng
 from typing import Dict, List, Tuple, Optional, Set
 from itertools import product, combinations
 from models import Entity, Issue, Offer, UtilityFunction
@@ -46,11 +47,13 @@ def calculate_nash_product(offer: Dict[str, float],
 
 def find_nash_bargaining_solution(entities: List[Entity],
                                  issues: List[Issue],
-                                 samples: int = 1000) -> Dict[str, float]:
+                                 samples: int = 1000,
+                                 rng: Optional[Generator] = None) -> Dict[str, float]:
     """
     Find approximate Nash bargaining solution through sampling.
     Returns the offer that maximizes the Nash product.
     """
+    rng = default_rng() if rng is None else rng
     best_offer = None
     best_nash_product = -1
 
@@ -59,11 +62,11 @@ def find_nash_bargaining_solution(entities: List[Entity],
         offer = {}
         for issue in issues:
             if issue.divisible:
-                value = np.random.uniform(issue.min_value, issue.max_value)
+                value = rng.uniform(issue.min_value, issue.max_value)
             else:
                 # For indivisible issues, pick discrete values
-                value = np.random.choice([issue.min_value, issue.max_value])
-            offer[issue.name] = value
+                value = rng.choice([issue.min_value, issue.max_value])
+            offer[issue.name] = float(value)
 
         # Calculate Nash product
         nash_product = calculate_nash_product(offer, entities)
@@ -125,10 +128,12 @@ def find_pareto_frontier(offers: List[Dict[str, float]],
 def is_pareto_optimal(offer: Dict[str, float],
                      entities: List[Entity],
                      issues: List[Issue],
-                     samples: int = 100) -> bool:
+                     samples: int = 100,
+                     rng: Optional[Generator] = None) -> bool:
     """
     Check if an offer is approximately Pareto optimal through sampling.
     """
+    rng = default_rng() if rng is None else rng
     current_utilities = [e.utility_function.calculate_utility(offer) for e in entities]
 
     # Try to find a Pareto improvement
@@ -138,18 +143,20 @@ def is_pareto_optimal(offer: Dict[str, float],
         for issue in issues:
             if issue.divisible:
                 # Small perturbation
-                delta = np.random.normal(0, (issue.max_value - issue.min_value) * 0.1)
+                delta = rng.normal(0, (issue.max_value - issue.min_value) * 0.1)
                 value = offer.get(issue.name, (issue.max_value + issue.min_value) / 2) + delta
                 value = np.clip(value, issue.min_value, issue.max_value)
             else:
                 value = offer.get(issue.name, issue.min_value)
-            new_offer[issue.name] = value
+            new_offer[issue.name] = float(value)
 
         # Check if this is a Pareto improvement
         new_utilities = [e.utility_function.calculate_utility(new_offer) for e in entities]
 
-        if all(nu >= cu for nu, cu in zip(new_utilities, current_utilities)) and \
-           any(nu > cu for nu, cu in zip(new_utilities, current_utilities)):
+        if (
+            all(nu >= cu for nu, cu in zip(new_utilities, current_utilities))
+            and any(nu > cu for nu, cu in zip(new_utilities, current_utilities))
+        ):
             return False  # Found a Pareto improvement
 
     return True  # No Pareto improvement found
@@ -159,11 +166,13 @@ def is_pareto_optimal(offer: Dict[str, float],
 
 def find_zopa(entities: List[Entity],
               issues: List[Issue],
-              samples: int = 1000) -> List[Dict[str, float]]:
+              samples: int = 1000,
+              rng: Optional[Generator] = None) -> List[Dict[str, float]]:
     """
     Find the Zone of Possible Agreement (ZOPA).
     Returns offers where all parties get at least their reservation utility.
     """
+    rng = default_rng() if rng is None else rng
     zopa = []
 
     for _ in range(samples):
@@ -171,10 +180,10 @@ def find_zopa(entities: List[Entity],
         offer = {}
         for issue in issues:
             if issue.divisible:
-                value = np.random.uniform(issue.min_value, issue.max_value)
+                value = rng.uniform(issue.min_value, issue.max_value)
             else:
-                value = np.random.choice([issue.min_value, issue.max_value])
-            offer[issue.name] = value
+                value = rng.choice([issue.min_value, issue.max_value])
+            offer[issue.name] = float(value)
 
         # Check if all entities meet their reservation
         all_satisfied = True
@@ -275,13 +284,15 @@ def generate_weighted_offer(entities: List[Entity],
 
 def analyze_negotiation_space(entities: List[Entity],
                              issues: List[Issue],
-                             samples: int = 1000) -> Dict:
+                             samples: int = 1000,
+                             rng: Optional[Generator] = None) -> Dict:
     """
     Comprehensive analysis of the negotiation space.
     Returns statistics about ZOPA, Pareto frontier, Nash solution, etc.
     """
+    rng = default_rng() if rng is None else rng
     # Find ZOPA
-    zopa = find_zopa(entities, issues, samples)
+    zopa = find_zopa(entities, issues, samples, rng=rng)
 
     if not zopa:
         return {
@@ -295,7 +306,7 @@ def analyze_negotiation_space(entities: List[Entity],
     pareto_frontier = find_pareto_frontier(zopa[:100], entities)  # Limit for performance
 
     # Find Nash solution
-    nash_solution = find_nash_bargaining_solution(entities, issues, samples)
+    nash_solution = find_nash_bargaining_solution(entities, issues, samples, rng=rng)
 
     # Calculate average utilities in ZOPA
     avg_utilities = {}
@@ -317,6 +328,8 @@ def analyze_negotiation_space(entities: List[Entity],
         'max_joint_utility': max(calculate_joint_utility(o, entities) for o in zopa),
         'min_joint_utility': min(calculate_joint_utility(o, entities) for o in zopa)
     }
+
+
 
 
 def calculate_bargaining_power(entity: Entity,

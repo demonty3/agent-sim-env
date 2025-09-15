@@ -86,6 +86,7 @@ class SimulationConfig:
     protocol: str = "alternating"
     track_pareto: bool = True
     calculate_nash: bool = True
+    seed: Optional[int] = None
 
     def to_dict(self) -> dict:
         return {
@@ -94,7 +95,8 @@ class SimulationConfig:
             'max_rounds': self.max_rounds,
             'protocol': self.protocol,
             'track_pareto': self.track_pareto,
-            'calculate_nash': self.calculate_nash
+            'calculate_nash': self.calculate_nash,
+            'seed': self.seed
         }
 
 
