@@ -1,0 +1,138 @@
+# Sample configuration for AI Agent Negotiation Simulator
+# This example shows a climate accord negotiation between three nations
+
+# Negotiating entities (countries, companies, etc.)
+entities:
+  - name: "Developed_Nation"
+    type: "country"
+    utility:
+      # How much each issue matters (weights should sum to 1.0 conceptually)
+      weights:
+        emissions_reduction: 0.3
+        financial_contribution: 0.2
+        technology_transfer: 0.3
+        timeline: 0.2
+      # Ideal values (best case scenario)
+      ideal_values:
+        emissions_reduction: 20  # Only 20% reduction ideally
+        financial_contribution: 10  # $10B contribution
+        technology_transfer: 100  # Full tech transfer
+        timeline: 2040  # Long timeline preferred
+      # Walk-away points (worst acceptable values)
+      reservation_values:
+        emissions_reduction: 40  # Max 40% reduction
+        financial_contribution: 30  # Max $30B
+        technology_transfer: 50  # At least 50% tech transfer
+        timeline: 2030  # No sooner than 2030
+
+    policy:
+      type: "boulware"  # Hard negotiator - concedes slowly
+      params:
+        accept_threshold: 0.75  # Needs 75% utility to accept
+        initial_demand: 0.95  # Starts at 95% of ideal
+        concession_rate: 0.04  # Concedes slowly
+        patience: 40  # Very patient
+        stubbornness: 0.8  # Very stubborn
+
+    max_rounds: 100
+    min_acceptable_utility: 0.6
+
+  - name: "Developing_Nation"
+    type: "country"
+    utility:
+      weights:
+        emissions_reduction: 0.2
+        financial_contribution: 0.4  # Money is most important
+        technology_transfer: 0.3
+        timeline: 0.1
+      ideal_values:
+        emissions_reduction: 10  # Only 10% reduction
+        financial_contribution: 100  # Want $100B in aid
+        technology_transfer: 100  # Full tech transfer
+        timeline: 2050  # Very long timeline
+      reservation_values:
+        emissions_reduction: 25  # Max 25% reduction
+        financial_contribution: 40  # Need at least $40B
+        technology_transfer: 60  # Need 60% tech minimum
+        timeline: 2035  # No sooner than 2035
+
+    policy:
+      type: "conceder"  # More willing to compromise
+      params:
+        accept_threshold: 0.6  # Lower acceptance threshold
+        initial_demand: 0.85
+        concession_rate: 0.1  # Concedes faster
+        patience: 25
+        stubbornness: 0.3
+
+    max_rounds: 100
+    min_acceptable_utility: 0.5
+
+  - name: "Island_Nation"
+    type: "country"
+    utility:
+      weights:
+        emissions_reduction: 0.5  # Emissions most critical (climate vulnerable)
+        financial_contribution: 0.2
+        technology_transfer: 0.2
+        timeline: 0.1
+      ideal_values:
+        emissions_reduction: 60  # Want 60% global reduction
+        financial_contribution: 50  # $50B for adaptation
+        technology_transfer: 80  # High tech transfer
+        timeline: 2025  # ASAP
+      reservation_values:
+        emissions_reduction: 35  # Need at least 35% reduction
+        financial_contribution: 20  # Need at least $20B
+        technology_transfer: 40  # Some tech transfer essential
+        timeline: 2035  # Can't wait past 2035
+
+    policy:
+      type: "adaptive"  # Learns and adapts strategy
+      params:
+        accept_threshold: 0.65
+        initial_demand: 0.9
+        concession_rate: 0.07
+        learning_rate: 0.2  # Adapts based on others' behavior
+        exploration_factor: 0.15
+        patience: 30
+
+    max_rounds: 100
+    min_acceptable_utility: 0.55
+
+# Issues being negotiated
+issues:
+  - name: "emissions_reduction"
+    min_value: 0
+    max_value: 80  # Percentage reduction
+    divisible: true
+    unit: "percent"
+
+  - name: "financial_contribution"
+    min_value: 0
+    max_value: 150  # Billions USD
+    divisible: true
+    unit: "billion_USD"
+
+  - name: "technology_transfer"
+    min_value: 0
+    max_value: 100  # Percentage of clean tech shared
+    divisible: true
+    unit: "percent"
+
+  - name: "timeline"
+    min_value: 2025
+    max_value: 2050  # Year for implementation
+    divisible: false  # Must pick specific year
+    unit: "year"
+
+# Simulation settings
+max_rounds: 100
+protocol: "alternating"  # Options: alternating, simultaneous, random
+allow_coalition: false  # Can subgroups form coalitions?
+track_pareto: true  # Track if outcomes are Pareto optimal
+calculate_nash: true  # Calculate Nash bargaining solution
+
+# Additional settings for advanced features
+information_type: "complete"  # complete or incomplete information
+allow_side_payments: false  # Can entities make side payments?

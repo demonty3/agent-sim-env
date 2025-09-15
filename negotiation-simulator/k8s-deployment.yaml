@@ -1,0 +1,485 @@
+# Kubernetes deployment configuration for Negotiation Simulator
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: negotiation-sim
+
+---
+# ConfigMap for application configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: negotiation-config
+  namespace: negotiation-sim
+data:
+  MAX_ROUNDS: "100"
+  DEFAULT_PROTOCOL: "alternating"
+  LOG_LEVEL: "INFO"
+  ENABLE_MONITORING: "true"
+  PROMETHEUS_PORT: "9090"
+
+---
+# Secret for sensitive data
+apiVersion: v1
+kind: Secret
+metadata:
+  name: negotiation-secrets
+  namespace: negotiation-sim
+type: Opaque
+data:
+  database-url: cG9zdGdyZXNxbDovL3VzZXI6cGFzc0BkYi9uZWdvdGlhdGlvbg==  # base64 encoded
+  redis-url: cmVkaXM6Ly9yZWRpcy1zZXJ2aWNlOjYzNzk=
+  sentry-dsn: aHR0cHM6Ly9rZXlAc2VudHJ5LmlvL3Byb2plY3Q=
+  jwt-secret: c3VwZXItc2VjcmV0LWtleS0xMjM0NTY=
+
+---
+# PersistentVolumeClaim for data storage
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: negotiation-data-pvc
+  namespace: negotiation-sim
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# PostgreSQL Database Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: negotiation-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_DB
+          value: negotiation_db
+        - name: POSTGRES_USER
+          value: negotiator
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: database-password
+        volumeMounts:
+        - name: postgres-storage
+          mountPath: /var/lib/postgresql/data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: postgres-storage
+        persistentVolumeClaim:
+          claimName: negotiation-data-pvc
+
+---
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+  namespace: negotiation-sim
+spec:
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+  type: ClusterIP
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: negotiation-sim
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+
+---
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: negotiation-sim
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+  type: ClusterIP
+
+---
+# API Server Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: negotiation-api
+  namespace: negotiation-sim
+  labels:
+    app: negotiation-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: negotiation-api
+  template:
+    metadata:
+      labels:
+        app: negotiation-api
+    spec:
+      containers:
+      - name: api
+        image: negotiation-simulator:latest
+        command: ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]
+        ports:
+        - containerPort: 8000
+          name: http
+        - containerPort: 9090
+          name: metrics
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: redis-url
+        - name: SENTRY_DSN
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: sentry-dsn
+        envFrom:
+        - configMapRef:
+            name: negotiation-config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data-volume
+          mountPath: /app/data
+      volumes:
+      - name: data-volume
+        emptyDir: {}
+
+---
+# API Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: negotiation-api-service
+  namespace: negotiation-sim
+  labels:
+    app: negotiation-api
+spec:
+  selector:
+    app: negotiation-api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+  type: LoadBalancer
+
+---
+# Web UI Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: negotiation-web
+  namespace: negotiation-sim
+  labels:
+    app: negotiation-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: negotiation-web
+  template:
+    metadata:
+      labels:
+        app: negotiation-web
+    spec:
+      containers:
+      - name: web
+        image: negotiation-simulator:latest
+        command: ["streamlit", "run", "web_interface.py", "--server.port=8501", "--server.address=0.0.0.0"]
+        ports:
+        - containerPort: 8501
+        env:
+        - name: API_URL
+          value: "http://negotiation-api-service:8000"
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: database-url
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8501
+          initialDelaySeconds: 30
+          periodSeconds: 10
+
+---
+# Web UI Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: negotiation-web-service
+  namespace: negotiation-sim
+spec:
+  selector:
+    app: negotiation-web
+  ports:
+  - port: 80
+    targetPort: 8501
+  type: LoadBalancer
+
+---
+# Worker Deployment for Background Tasks
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: negotiation-worker
+  namespace: negotiation-sim
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: negotiation-worker
+  template:
+    metadata:
+      labels:
+        app: negotiation-worker
+    spec:
+      containers:
+      - name: worker
+        image: negotiation-simulator:latest
+        command: ["python", "worker.py"]
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: database-url
+        - name: REDIS_URL
+          valueFrom:
+            secretKeyRef:
+              name: negotiation-secrets
+              key: redis-url
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+---
+# HorizontalPodAutoscaler for API
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: negotiation-api-hpa
+  namespace: negotiation-sim
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: negotiation-api
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+
+---
+# Ingress Configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: negotiation-ingress
+  namespace: negotiation-sim
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,X-CustomHeader,Keep-Alive,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Authorization"
+spec:
+  tls:
+  - hosts:
+    - api.negotiation-sim.ai
+    - app.negotiation-sim.ai
+    secretName: negotiation-tls
+  rules:
+  - host: api.negotiation-sim.ai
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: negotiation-api-service
+            port:
+              number: 8000
+  - host: app.negotiation-sim.ai
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: negotiation-web-service
+            port:
+              number: 80
+
+---
+# ServiceMonitor for Prometheus
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: negotiation-metrics
+  namespace: negotiation-sim
+spec:
+  selector:
+    matchLabels:
+      app: negotiation-api
+  endpoints:
+  - port: metrics
+    interval: 30s
+    path: /metrics
+
+---
+# NetworkPolicy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: negotiation-network-policy
+  namespace: negotiation-sim
+spec:
+  podSelector:
+    matchLabels:
+      app: negotiation-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app: negotiation-web
+    - podSelector:
+        matchLabels:
+          app: nginx-ingress
+    ports:
+    - protocol: TCP
+      port: 8000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app: postgres
+    ports:
+    - protocol: TCP
+      port: 5432
+  - to:
+    - podSelector:
+        matchLabels:
+          app: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  - ports:
+    - protocol: TCP
+      port: 443  # For external API calls
+    - protocol: TCP
+      port: 53   # For DNS
+    - protocol: UDP
+      port: 53

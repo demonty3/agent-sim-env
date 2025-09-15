@@ -3,7 +3,7 @@ REST API server for the negotiation simulator.
 Provides endpoints for running simulations, managing configurations, and analysis.
 """
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, BackgroundTasks, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
@@ -23,6 +23,13 @@ from protocol import NegotiationEngine, BatchNegotiationRunner
 from utilities import analyze_negotiation_space, find_nash_bargaining_solution
 from advisor import NegotiationAdvisor
 from advanced_strategies import create_advanced_strategy
+from auth import get_current_user
+from config import settings
+
+try:
+    import redis  # type: ignore
+except Exception:
+    redis = None  # Redis is optional
 
 # ===== APP INITIALIZATION =====
 
@@ -185,7 +192,7 @@ async def root():
 
 
 @app.post("/simulate", response_model=SimulationResponse)
-async def simulate(request: SimulationRequest, background_tasks: BackgroundTasks):
+async def simulate(request: SimulationRequest, background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
     """Run a single negotiation simulation."""
 
     # Create simulation ID
@@ -238,7 +245,7 @@ async def get_simulation(sim_id: str):
 
 
 @app.post("/batch")
-async def batch_simulate(request: BatchRequest, background_tasks: BackgroundTasks):
+async def batch_simulate(request: BatchRequest, background_tasks: BackgroundTasks, user: str = Depends(get_current_user)):
     """Run batch simulations."""
 
     batch_id = str(uuid.uuid4())
@@ -286,7 +293,7 @@ async def get_batch_results(batch_id: str):
 
 
 @app.post("/analyze")
-async def analyze_space(request: AnalysisRequest):
+async def analyze_space(request: AnalysisRequest, user: str = Depends(get_current_user)):
     """Analyze negotiation space."""
 
     entities = [create_entity_from_request(e) for e in request.entities]
@@ -349,6 +356,55 @@ async def get_advice(sim_id: str):
     }
 
     return report
+
+
+# ===== TASK QUEUE (REDIS) =====
+
+from enum import Enum
+from pydantic import BaseModel
+
+
+class TaskPriority(str, Enum):
+    high = "high"
+    normal = "normal"
+    low = "low"
+
+
+class EnqueueSimulation(BaseModel):
+    config: SimulationRequest
+    priority: TaskPriority = TaskPriority.normal
+    id: Optional[str] = None
+
+
+@app.post("/tasks/enqueue/simulation")
+async def enqueue_simulation(req: EnqueueSimulation, user: str = Depends(get_current_user)):
+    if redis is None:
+        raise HTTPException(status_code=503, detail="Redis not installed")
+
+    task_id = req.id or str(uuid.uuid4())
+    task = {
+        "id": task_id,
+        "type": "simulation",
+        "config": req.config.dict(),
+    }
+
+    client = redis.from_url(settings.REDIS_URL, **settings.get_redis_settings())
+    queue_name = f"negotiation_queue:{req.priority.value}"
+    client.lpush(queue_name, json.dumps(task))
+    return {"task_id": task_id, "status": "queued", "queue": queue_name}
+
+
+@app.get("/tasks/{task_id}/status")
+async def get_task_status(task_id: str, user: str = Depends(get_current_user)):
+    if redis is None:
+        raise HTTPException(status_code=503, detail="Redis not installed")
+    client = redis.from_url(settings.REDIS_URL, **settings.get_redis_settings())
+    status_data = client.get(f"task_status:{task_id}")
+    result_data = client.get(f"result:{task_id}") or client.get(f"batch_result:{task_id}")
+    return {
+        "status": json.loads(status_data) if status_data else None,
+        "result": json.loads(result_data) if result_data else None,
+    }
 
 
 @app.post("/configs")
