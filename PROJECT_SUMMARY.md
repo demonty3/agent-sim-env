@@ -29,7 +29,7 @@ A state-of-the-art negotiation simulation framework that models complex multi-pa
 ## 📁 Project Structure
 
 ```
-negotiation-simulator/
+.
 ├── Core Engine (3,500+ lines)
 │   ├── models.py           # Data models and structures
 │   ├── protocol.py         # Negotiation orchestration
