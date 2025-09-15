@@ -303,9 +303,13 @@ def analyze_negotiation_space(entities: List[Entity],
         utilities = [entity.utility_function.calculate_utility(offer) for offer in zopa]
         avg_utilities[entity.name] = np.mean(utilities)
 
+    # Normalize ZOPA size to a 0-100 scale for comparability across different sample sizes
+    zopa_count = len(zopa)
+    zopa_size_scaled = int((zopa_count / max(1, samples)) * 100)
+
     return {
         'has_zopa': True,
-        'zopa_size': len(zopa),
+        'zopa_size': zopa_size_scaled,
         'pareto_frontier_size': len(pareto_frontier),
         'nash_solution': nash_solution,
         'nash_product': calculate_nash_product(nash_solution, entities) if nash_solution else 0,

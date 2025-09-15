@@ -71,9 +71,12 @@ class NegotiationEngine:
                 round_num=r, offers=[offer], active_proposer=proposer.name
             )
 
-            # Collect responses
+            # Collect responses (proposer is assumed to accept their own offer)
             all_accept = True
             for entity in self.entities:
+                if entity.name == proposer.name:
+                    round_obj.responses[entity.name] = True
+                    continue
                 accept, _ = entity.evaluate_offer(offer.values)
                 round_obj.responses[entity.name] = accept
                 if not accept:
@@ -130,9 +133,12 @@ class NegotiationEngine:
                 round_num=r, offers=offers, active_proposer="simultaneous"
             )
 
-            # Everyone evaluates the best offer
+            # Everyone evaluates the best offer (proposer of best_offer auto-accepts)
             all_accept = True
             for entity in self.entities:
+                if entity.name == best_offer.proposer:
+                    round_obj.responses[entity.name] = True
+                    continue
                 accept, _ = entity.evaluate_offer(best_offer.values)
                 round_obj.responses[entity.name] = accept
                 if not accept:
@@ -178,6 +184,9 @@ class NegotiationEngine:
 
             all_accept = True
             for entity in self.entities:
+                if entity.name == proposer.name:
+                    round_obj.responses[entity.name] = True
+                    continue
                 accept, _ = entity.evaluate_offer(offer.values)
                 round_obj.responses[entity.name] = accept
                 if not accept:
@@ -273,7 +282,7 @@ class BatchNegotiationRunner:
 
     def analyze_results(self) -> Dict[str, float]:
         if not self.results:
-            return {"success_rate": 0.0, "average_rounds": 0.0, "total_runs": 0}
+            return {"success_rate": 0.0, "average_rounds": 0.0, "total_runs": 0, "pareto_optimal_rate": 0.0}
 
         total_runs = len(self.results)
         successes = [r for r in self.results if r.success]
@@ -288,11 +297,18 @@ class BatchNegotiationRunner:
                 vals = [r.final_utilities.get(name, 0.0) for r in successes]
                 avg_utils[name] = float(np.mean(vals)) if vals else 0.0
 
+        # Pareto optimal rate among successful runs
+        pareto_rate = 0.0
+        if successes:
+            pareto_flags = [1 for r in successes if r.pareto_optimal is True]
+            pareto_rate = len(pareto_flags) / len(successes)
+
         return {
             "success_rate": success_rate,
             "average_rounds": avg_rounds,
             "total_runs": total_runs,
             "average_utilities": avg_utils if avg_utils else None,
+            "pareto_optimal_rate": pareto_rate,
         }
 
     def _apply_variations(
