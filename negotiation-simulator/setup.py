@@ -36,6 +36,25 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/yourusername/negotiation-simulator",
     packages=find_packages(exclude=["tests", "docs", "examples"]),
+    # Include top-level modules so console scripts work without a package layout
+    py_modules=[
+        "models",
+        "utilities",
+        "protocol",
+        "main",
+        "cli",
+        "advanced_strategies",
+        "api",
+        "visualization",
+        "database",
+        "auth",
+        "config",
+        "monitoring",
+        "worker",
+        "sdk",
+        "benchmarking",
+        "web_interface",
+    ],
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
@@ -75,8 +94,5 @@ setup(
         ],
     },
     include_package_data=True,
-    package_data={
-        "": ["*.yaml", "*.json", "*.md"],
-    },
     zip_safe=False,
 )

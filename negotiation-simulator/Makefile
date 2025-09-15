@@ -142,6 +142,10 @@ api:
 	@echo "$(GREEN)Starting API server on http://localhost:8000$(NC)"
 	uvicorn api:app --reload --port=8000
 
+worker:
+	@echo "$(GREEN)Starting background worker service$(NC)"
+	$(PYTHON) worker.py
+
 jupyter:
 	@echo "$(GREEN)Starting Jupyter notebook...$(NC)"
 	jupyter notebook
