@@ -3,6 +3,7 @@ Core data models for the negotiation simulator.
 """
 
 from typing import Dict, List, Optional, Any, Literal
+from functools import partial
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 try:
@@ -125,39 +126,19 @@ class NegotiationPolicy(BaseModel):
     params: PolicyParameters = Field(default_factory=PolicyParameters)
 
     def make_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
-        """Generate an offer according to the configured policy type.
+        dispatch_map = {
+            PolicyType.LINEAR_CONCESSION: partial(self._linear_concession_offer, round_num, utility_fn, issues),
+            PolicyType.FIXED_THRESHOLD: partial(self._fixed_threshold_offer, utility_fn, issues),
+            PolicyType.TIT_FOR_TAT: partial(self._tit_for_tat_offer, round_num, history, utility_fn, issues),
+            PolicyType.BOULWARE: partial(self._boulware_offer, round_num, utility_fn, issues),
+            PolicyType.CONCEDER: partial(self._conceder_offer, round_num, utility_fn, issues),
+            PolicyType.ADAPTIVE: partial(self._adaptive_offer, round_num, history, utility_fn, issues),
+        }
 
-        Args:
-            round_num: One-based round counter used for time-dependent
-                strategies.
-            history: Chronological list of prior :class:`Offer` instances.
-            utility_fn: Utility function belonging to the proposing entity.
-            issues: Negotiable issues that must appear in the returned offer.
-
-        Returns:
-            Dict[str, float]: Mapping from issue names to proposed values that
-            complies with the chosen strategy and parameterization.
-
-        Side Effects:
-            May temporarily adjust internal parameters or draw random samples
-            for adaptive behaviors but restores the original values before
-            returning.
-        """
-
-        if self.type == PolicyType.LINEAR_CONCESSION:
-            return self._linear_concession_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.FIXED_THRESHOLD:
-            return self._fixed_threshold_offer(utility_fn, issues)
-        elif self.type == PolicyType.TIT_FOR_TAT:
-            return self._tit_for_tat_offer(round_num, history, utility_fn, issues)
-        elif self.type == PolicyType.BOULWARE:
-            return self._boulware_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.CONCEDER:
-            return self._conceder_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.ADAPTIVE:
-            return self._adaptive_offer(round_num, history, utility_fn, issues)
-        else:
-            return self._default_offer(utility_fn, issues)
+        handler = dispatch_map.get(self.type)
+        if handler is None:
+            raise ValueError(f"Unsupported policy type: {self.type}")
+        return handler()
 
     def _linear_concession_offer(self, round_num: int, utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         concession_factor = min(1.0, round_num * self.params.concession_rate)
