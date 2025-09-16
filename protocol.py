@@ -27,15 +27,19 @@ from utilities import (
 
 
 class NegotiationEngine:
-    """
-    Minimal negotiation engine.
-
-    - Alternating: entities take turns proposing one offer per round.
-    - Simultaneous: all entities propose; pick the offer with max joint utility.
-    - Random: randomly choose a proposer each round.
-    """
+    """Coordinate negotiation rounds under a configurable protocol."""
 
     def __init__(self, config: SimulationConfig):
+        """Initialize the engine with simulation participants and settings.
+
+        Args:
+            config: Fully validated simulation configuration.
+
+        Side Effects:
+            Stores references to entities and issues and resets the transcript
+            that will accumulate round data during a run.
+        """
+
         self.config = config
         self.entities: List[Entity] = config.entities
         self.issues: List[Issue] = config.issues
@@ -49,6 +53,17 @@ class NegotiationEngine:
 
     # ---------- Core Run ----------
     def run(self) -> NegotiationOutcome:
+        """Execute the configured negotiation protocol until termination.
+
+        Returns:
+            NegotiationOutcome: Final outcome containing agreement information
+            and the complete transcript of offers.
+
+        Side Effects:
+            Mutates ``self.transcript`` and internal round counters as the
+            negotiation progresses.
+        """
+
         if self.protocol == "alternating":
             return self._run_alternating()
         elif self.protocol == "simultaneous":
@@ -270,13 +285,41 @@ class NegotiationEngine:
 
 
 class BatchNegotiationRunner:
-    """Run many negotiations and analyze outcomes."""
+    """Execute repeated negotiation simulations and summarize outcomes."""
 
     def __init__(self, base_config: SimulationConfig):
+        """Store the base configuration used for repeated simulations.
+
+        Args:
+            base_config: Prototype configuration used as the starting point for
+                each batch run.
+
+        Side Effects:
+            Initializes the internal results list to track aggregated
+            negotiation outcomes.
+        """
+
         self.base_config = base_config
         self.results: List[NegotiationOutcome] = []
 
     def run_batch(self, n_runs: int, vary_params: Optional[Dict] = None) -> List[NegotiationOutcome]:
+        """Run multiple negotiations while optionally varying parameters.
+
+        Args:
+            n_runs: Number of simulations to execute.
+            vary_params: Optional mapping of policy parameter names to boolean
+                flags indicating whether random perturbations should be
+                applied.
+
+        Returns:
+            List[NegotiationOutcome]: Collection of outcomes produced by each
+            simulation run.
+
+        Side Effects:
+            Resets and populates :attr:`results` with the outcomes from the
+            executed simulations.
+        """
+
         self.results = []
         for i in range(n_runs):
             config = self._apply_variations(self.base_config, vary_params, seed=i)
@@ -285,6 +328,17 @@ class BatchNegotiationRunner:
         return self.results
 
     def analyze_results(self) -> Dict[str, float]:
+        """Compute summary statistics for the previously executed runs.
+
+        Returns:
+            Dict[str, float]: Aggregated metrics such as success rate, average
+            rounds, and Pareto optimality rate. Returns zeros when no results
+            are available.
+
+        Side Effects:
+            None.
+        """
+
         if not self.results:
             return {"success_rate": 0.0, "average_rounds": 0.0, "total_runs": 0, "pareto_optimal_rate": 0.0}
 

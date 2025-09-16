@@ -142,6 +142,22 @@ class TestModels:
         # Later round should have more concession (higher price for buyer)
         assert offer_round_5["price"] > offer_round_1["price"]
 
+    def test_policy_unsupported_type(self):
+        """Policy should raise when encountering unsupported types."""
+        policy = NegotiationPolicy(type=PolicyType.LINEAR_CONCESSION)
+        utility_fn = UtilityFunction(
+            weights={"price": 1.0},
+            ideal_values={"price": 100},
+            reservation_values={"price": 0}
+        )
+        issues = [Issue(name="price", min_value=0, max_value=100)]
+
+        # Bypass validation to simulate a runtime unsupported policy type
+        policy.__dict__["type"] = "unsupported_policy"
+
+        with pytest.raises(ValueError):
+            policy.make_offer(1, [], utility_fn, issues)
+
     def test_entity_evaluation(self):
         """Test entity offer evaluation."""
         entity = Entity(
