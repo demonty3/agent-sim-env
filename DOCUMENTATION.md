@@ -49,7 +49,7 @@ The AI Agent Negotiation Simulator is a sophisticated framework for modeling and
 ### System Components
 
 ```
-negotiation-simulator/
+.
 ├── Core Engine
 │   ├── models.py         # Data models and structures
 │   ├── protocol.py       # Negotiation orchestration
