@@ -17,6 +17,7 @@ except Exception:  # pragma: no cover
     from pydantic import validator  # type: ignore
 from enum import Enum
 import numpy as np
+from numpy.random import Generator, default_rng
 
 
 class PolicyType(str, Enum):
@@ -125,6 +126,33 @@ class NegotiationPolicy(BaseModel):
     type: PolicyType
     params: PolicyParameters = Field(default_factory=PolicyParameters)
 
+<<<<<<< HEAD
+    def make_offer(
+        self,
+        round_num: int,
+        history: List['Offer'],
+        utility_fn: UtilityFunction,
+        issues: List[Issue],
+        rng: Optional[Generator] = None,
+    ) -> Dict[str, float]:
+        if rng is None:
+            rng = default_rng()
+
+        if self.type == PolicyType.LINEAR_CONCESSION:
+            return self._linear_concession_offer(round_num, utility_fn, issues)
+        elif self.type == PolicyType.FIXED_THRESHOLD:
+            return self._fixed_threshold_offer(utility_fn, issues)
+        elif self.type == PolicyType.TIT_FOR_TAT:
+            return self._tit_for_tat_offer(round_num, history, utility_fn, issues)
+        elif self.type == PolicyType.BOULWARE:
+            return self._boulware_offer(round_num, utility_fn, issues)
+        elif self.type == PolicyType.CONCEDER:
+            return self._conceder_offer(round_num, utility_fn, issues)
+        elif self.type == PolicyType.ADAPTIVE:
+            return self._adaptive_offer(round_num, history, utility_fn, issues, rng=rng)
+        else:
+            return self._default_offer(utility_fn, issues)
+=======
     def make_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         dispatch_map = {
             PolicyType.LINEAR_CONCESSION: partial(self._linear_concession_offer, round_num, utility_fn, issues),
@@ -139,6 +167,7 @@ class NegotiationPolicy(BaseModel):
         if handler is None:
             raise ValueError(f"Unsupported policy type: {self.type}")
         return handler()
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
 
     def _linear_concession_offer(self, round_num: int, utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         concession_factor = min(1.0, round_num * self.params.concession_rate)
@@ -210,7 +239,17 @@ class NegotiationPolicy(BaseModel):
             offer[issue.name] = value
         return offer
 
-    def _adaptive_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
+    def _adaptive_offer(
+        self,
+        round_num: int,
+        history: List['Offer'],
+        utility_fn: UtilityFunction,
+        issues: List[Issue],
+        rng: Optional[Generator] = None,
+    ) -> Dict[str, float]:
+        if rng is None:
+            rng = default_rng()
+
         # Adjust rate based on recent joint utility trend and add small exploration noise
         recent = history[-5:]
         joint_utils = []
@@ -238,10 +277,10 @@ class NegotiationPolicy(BaseModel):
         # Exploration noise
         noise_scale = self.params.exploration_factor * 0.05
         for issue in issues:
-            rng = (issue.max_value - issue.min_value)
-            if rng > 0 and issue.name in base_offer:
+            range_span = (issue.max_value - issue.min_value)
+            if range_span > 0 and issue.name in base_offer:
                 base_offer[issue.name] = float(np.clip(
-                    base_offer[issue.name] + np.random.normal(0, rng * noise_scale),
+                    base_offer[issue.name] + rng.normal(0, range_span * noise_scale),
                     issue.min_value,
                     issue.max_value
                 ))
@@ -377,6 +416,7 @@ class SimulationConfig(BaseModel):
     information_type: Literal["complete", "incomplete"] = "complete"
     track_pareto: bool = True
     calculate_nash: bool = True
+    seed: Optional[int] = None
 
     @validator('entities', allow_reuse=True)
     def validate_entities(cls, v):
@@ -409,3 +449,7 @@ class SimulationConfig(BaseModel):
 
         import yaml
         return yaml.dump(self.dict(), default_flow_style=False)
+
+    def create_rng(self) -> Generator:
+        """Create a NumPy random number generator using the configured seed."""
+        return default_rng(self.seed)

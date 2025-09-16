@@ -166,7 +166,7 @@ class TestUtilities:
 
     def test_zopa_finding(self, simple_entities, simple_issues):
         """Test ZOPA (Zone of Possible Agreement) finding."""
-        zopa = find_zopa(simple_entities, simple_issues, samples=100)
+        zopa = find_zopa(simple_entities, simple_issues, samples=100, rng=np.random.default_rng(TEST_SEED))
 
         # Should find some agreements
         assert len(zopa) > 0
@@ -179,7 +179,7 @@ class TestUtilities:
 
     def test_negotiation_space_analysis(self, simple_entities, simple_issues):
         """Test comprehensive space analysis."""
-        analysis = analyze_negotiation_space(simple_entities, simple_issues, samples=200)
+        analysis = analyze_negotiation_space(simple_entities, simple_issues, samples=200, rng=np.random.default_rng(TEST_SEED))
 
         assert "has_zopa" in analysis
         assert "zopa_size" in analysis
@@ -245,7 +245,8 @@ class TestProtocol:
             entities=simple_entities,
             issues=simple_issues,
             max_rounds=50,
-            protocol="simultaneous"
+            protocol="simultaneous",
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)
@@ -289,7 +290,8 @@ class TestProtocol:
         config = SimulationConfig(
             entities=entities,
             issues=issues,
-            max_rounds=100
+            max_rounds=100,
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)
@@ -447,7 +449,8 @@ class TestIntegration:
                 config = SimulationConfig(
                     entities=entities,
                     issues=simple_issues,
-                    max_rounds=50
+                    max_rounds=50,
+                    seed=TEST_SEED
                 )
 
                 engine = NegotiationEngine(config)
@@ -493,7 +496,8 @@ class TestIntegration:
             entities=entities,
             issues=issues,
             max_rounds=100,
-            protocol="simultaneous"  # Better for multi-party
+            protocol="simultaneous",  # Better for multi-party
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)

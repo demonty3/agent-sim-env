@@ -388,7 +388,9 @@ class NegotiationAdvisor:
             insights.append(f"Complex {len(config.issues)}-issue negotiation may benefit from issue bundling")
 
         # Zone analysis
-        space_analysis = analyze_negotiation_space(config.entities, config.issues, samples=100)
+        space_analysis = analyze_negotiation_space(
+            config.entities, config.issues, samples=100, rng=config.create_rng()
+        )
         if space_analysis['has_zopa']:
             zopa_size = space_analysis['zopa_size']
             if zopa_size < 10:
@@ -404,7 +406,9 @@ class NegotiationAdvisor:
         """Estimate probability of success with current configuration."""
 
         # Quick space analysis
-        space_analysis = analyze_negotiation_space(config.entities, config.issues, samples=200)
+        space_analysis = analyze_negotiation_space(
+            config.entities, config.issues, samples=200, rng=config.create_rng()
+        )
 
         if not space_analysis['has_zopa']:
             return 0.0
@@ -462,7 +466,7 @@ class NegotiationAdvisor:
 
         # Analyze the negotiation space
         temp_config = SimulationConfig(entities=entities, issues=issues)
-        space_analysis = analyze_negotiation_space(entities, issues, samples=500)
+        space_analysis = analyze_negotiation_space(entities, issues, samples=500, rng=temp_config.create_rng())
 
         for entity in entities:
             # Calculate entity's relative power
