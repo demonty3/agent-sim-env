@@ -3,6 +3,7 @@ Core data models for the negotiation simulator.
 """
 
 from typing import Dict, List, Optional, Any, Literal
+from functools import partial
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 try:
@@ -16,9 +17,12 @@ except Exception:  # pragma: no cover
     from pydantic import validator  # type: ignore
 from enum import Enum
 import numpy as np
+from numpy.random import Generator, default_rng
 
 
 class PolicyType(str, Enum):
+    """Enumerate the supported negotiation policy strategies."""
+
     LINEAR_CONCESSION = "linear_concession"
     TIT_FOR_TAT = "tit_for_tat"
     BOULWARE = "boulware"
@@ -28,6 +32,8 @@ class PolicyType(str, Enum):
 
 
 class OfferStatus(str, Enum):
+    """Possible lifecycle statuses for a proposed offer."""
+
     PENDING = "pending"
     ACCEPTED = "accepted"
     REJECTED = "rejected"
@@ -35,6 +41,8 @@ class OfferStatus(str, Enum):
 
 
 class Issue(BaseModel):
+    """Describe a single negotiable issue and its feasible domain."""
+
     name: str
     min_value: float
     max_value: float
@@ -58,11 +66,26 @@ class Issue(BaseModel):
 
 
 class UtilityFunction(BaseModel):
+    """Utility model capturing preferences for an entity across issues."""
+
     weights: Dict[str, float]
     ideal_values: Dict[str, float]
     reservation_values: Dict[str, float]
 
     def calculate_utility(self, offer: Dict[str, float]) -> float:
+        """Compute the normalized utility of a candidate offer.
+
+        Args:
+            offer: Mapping of issue names to the proposed values.
+
+        Returns:
+            float: Weighted utility in the range ``[0.0, 1.0]`` where larger
+            values are preferred.
+
+        Side Effects:
+            None.
+        """
+
         total_utility = 0.0
         total_weight = sum(self.weights.values())
         if total_weight <= 0:
@@ -83,6 +106,8 @@ class UtilityFunction(BaseModel):
 
 
 class PolicyParameters(BaseModel):
+    """Configuration parameters that modulate a negotiation policy."""
+
     accept_threshold: float = Field(0.7, ge=0, le=1)
     initial_demand: float = Field(0.95, ge=0, le=1)
     concession_rate: float = Field(0.1, ge=0, le=1)
@@ -96,10 +121,23 @@ class PolicyParameters(BaseModel):
 
 
 class NegotiationPolicy(BaseModel):
+    """Select and execute the strategy used to construct counter-offers."""
+
     type: PolicyType
     params: PolicyParameters = Field(default_factory=PolicyParameters)
 
-    def make_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
+<<<<<<< HEAD
+    def make_offer(
+        self,
+        round_num: int,
+        history: List['Offer'],
+        utility_fn: UtilityFunction,
+        issues: List[Issue],
+        rng: Optional[Generator] = None,
+    ) -> Dict[str, float]:
+        if rng is None:
+            rng = default_rng()
+
         if self.type == PolicyType.LINEAR_CONCESSION:
             return self._linear_concession_offer(round_num, utility_fn, issues)
         elif self.type == PolicyType.FIXED_THRESHOLD:
@@ -111,9 +149,25 @@ class NegotiationPolicy(BaseModel):
         elif self.type == PolicyType.CONCEDER:
             return self._conceder_offer(round_num, utility_fn, issues)
         elif self.type == PolicyType.ADAPTIVE:
-            return self._adaptive_offer(round_num, history, utility_fn, issues)
+            return self._adaptive_offer(round_num, history, utility_fn, issues, rng=rng)
         else:
             return self._default_offer(utility_fn, issues)
+=======
+    def make_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
+        dispatch_map = {
+            PolicyType.LINEAR_CONCESSION: partial(self._linear_concession_offer, round_num, utility_fn, issues),
+            PolicyType.FIXED_THRESHOLD: partial(self._fixed_threshold_offer, utility_fn, issues),
+            PolicyType.TIT_FOR_TAT: partial(self._tit_for_tat_offer, round_num, history, utility_fn, issues),
+            PolicyType.BOULWARE: partial(self._boulware_offer, round_num, utility_fn, issues),
+            PolicyType.CONCEDER: partial(self._conceder_offer, round_num, utility_fn, issues),
+            PolicyType.ADAPTIVE: partial(self._adaptive_offer, round_num, history, utility_fn, issues),
+        }
+
+        handler = dispatch_map.get(self.type)
+        if handler is None:
+            raise ValueError(f"Unsupported policy type: {self.type}")
+        return handler()
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
 
     def _linear_concession_offer(self, round_num: int, utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         concession_factor = min(1.0, round_num * self.params.concession_rate)
@@ -185,7 +239,17 @@ class NegotiationPolicy(BaseModel):
             offer[issue.name] = value
         return offer
 
-    def _adaptive_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
+    def _adaptive_offer(
+        self,
+        round_num: int,
+        history: List['Offer'],
+        utility_fn: UtilityFunction,
+        issues: List[Issue],
+        rng: Optional[Generator] = None,
+    ) -> Dict[str, float]:
+        if rng is None:
+            rng = default_rng()
+
         # Adjust rate based on recent joint utility trend and add small exploration noise
         recent = history[-5:]
         joint_utils = []
@@ -213,10 +277,10 @@ class NegotiationPolicy(BaseModel):
         # Exploration noise
         noise_scale = self.params.exploration_factor * 0.05
         for issue in issues:
-            rng = (issue.max_value - issue.min_value)
-            if rng > 0 and issue.name in base_offer:
+            range_span = (issue.max_value - issue.min_value)
+            if range_span > 0 and issue.name in base_offer:
                 base_offer[issue.name] = float(np.clip(
-                    base_offer[issue.name] + np.random.normal(0, rng * noise_scale),
+                    base_offer[issue.name] + rng.normal(0, range_span * noise_scale),
                     issue.min_value,
                     issue.max_value
                 ))
@@ -224,6 +288,8 @@ class NegotiationPolicy(BaseModel):
 
 
 class Entity(BaseModel):
+    """Participating negotiator with preferences, policy, and resources."""
+
     name: str
     type: Literal["country", "company", "individual", "other"] = "country"
     utility_function: UtilityFunction
@@ -236,6 +302,19 @@ class Entity(BaseModel):
     relationships: Dict[str, float] = Field(default_factory=dict)
 
     def evaluate_offer(self, offer: Dict[str, float]) -> tuple[bool, float]:
+        """Assess whether the entity accepts the given offer.
+
+        Args:
+            offer: Proposed issue values to evaluate.
+
+        Returns:
+            tuple[bool, float]: Boolean acceptance decision and the computed
+            utility score for the offer.
+
+        Side Effects:
+            None.
+        """
+
         utility = self.utility_function.calculate_utility(offer)
         accept = utility >= self.policy.params.accept_threshold
         return accept, utility
@@ -243,6 +322,8 @@ class Entity(BaseModel):
 
 @dataclass
 class Offer:
+    """Immutable representation of a single offer exchanged in negotiation."""
+
     round_num: int
     proposer: str
     values: Dict[str, float]
@@ -251,6 +332,15 @@ class Offer:
     timestamp: Optional[float] = None
 
     def to_dict(self) -> dict:
+        """Convert the offer to a serializable mapping.
+
+        Returns:
+            dict: Dictionary representation of the offer values and metadata.
+
+        Side Effects:
+            None.
+        """
+
         return {
             'round': self.round_num,
             'proposer': self.proposer,
@@ -262,16 +352,30 @@ class Offer:
 
 @dataclass
 class NegotiationRound:
+    """Aggregate offers and responses recorded for a negotiation round."""
+
     round_num: int
     offers: List[Offer]
     active_proposer: str
     responses: Dict[str, bool] = field(default_factory=dict)
 
     def is_complete(self) -> bool:
+        """Determine whether every entity responded during this round.
+
+        Returns:
+            bool: ``True`` if the number of responses equals the number of
+            tracked entities; ``False`` otherwise.
+
+        Side Effects:
+            None.
+        """
+
         return len(self.responses) == len(self.offers[0].utility_scores)
 
 
 class NegotiationOutcome(BaseModel):
+    """Summary of the negotiation process and its resulting agreement."""
+
     success: bool
     final_agreement: Optional[Dict[str, float]] = None
     rounds_taken: int
@@ -282,6 +386,16 @@ class NegotiationOutcome(BaseModel):
     nash_bargaining_score: Optional[float] = None
 
     def summary(self) -> str:
+        """Provide a human-readable synopsis of the negotiation result.
+
+        Returns:
+            str: Emoji-prefixed sentence that captures agreement status and
+            supporting metrics.
+
+        Side Effects:
+            None.
+        """
+
         if self.success:
             return f"✅ Agreement reached in {self.rounds_taken} rounds. " \
                    f"Average utility: {np.mean(list(self.final_utilities.values())):.2f}"
@@ -291,6 +405,8 @@ class NegotiationOutcome(BaseModel):
 
 
 class SimulationConfig(BaseModel):
+    """Container for simulation participants, issues, and protocol options."""
+
     entities: List[Entity]
     issues: List[Issue]
     max_rounds: int = Field(100, ge=1)
@@ -300,13 +416,40 @@ class SimulationConfig(BaseModel):
     information_type: Literal["complete", "incomplete"] = "complete"
     track_pareto: bool = True
     calculate_nash: bool = True
+    seed: Optional[int] = None
 
     @validator('entities', allow_reuse=True)
     def validate_entities(cls, v):
+        """Ensure there are enough participants for a negotiation session.
+
+        Args:
+            v: Collection of configured entities.
+
+        Returns:
+            List[Entity]: The validated list of participants.
+
+        Side Effects:
+            Raises a :class:`ValueError` if fewer than two entities are
+            provided.
+        """
+
         if len(v) < 2:
             raise ValueError('Need at least 2 entities to negotiate')
         return v
 
     def to_yaml(self) -> str:
+        """Serialize the configuration to YAML for persistence or sharing.
+
+        Returns:
+            str: YAML document describing the simulation parameters.
+
+        Side Effects:
+            Imports :mod:`yaml` to perform the serialization.
+        """
+
         import yaml
         return yaml.dump(self.dict(), default_flow_style=False)
+
+    def create_rng(self) -> Generator:
+        """Create a NumPy random number generator using the configured seed."""
+        return default_rng(self.seed)

@@ -5,8 +5,9 @@ Supports simple alternating, simultaneous, and random proposer protocols.
 
 from __future__ import annotations
 
-import random
 from typing import Dict, List, Optional
+
+from numpy.random import Generator, default_rng
 
 import numpy as np
 
@@ -26,27 +27,43 @@ from utilities import (
 
 
 class NegotiationEngine:
-    """
-    Minimal negotiation engine.
-
-    - Alternating: entities take turns proposing one offer per round.
-    - Simultaneous: all entities propose; pick the offer with max joint utility.
-    - Random: randomly choose a proposer each round.
-    """
+    """Coordinate negotiation rounds under a configurable protocol."""
 
     def __init__(self, config: SimulationConfig):
+        """Initialize the engine with simulation participants and settings.
+
+        Args:
+            config: Fully validated simulation configuration.
+
+        Side Effects:
+            Stores references to entities and issues and resets the transcript
+            that will accumulate round data during a run.
+        """
+
         self.config = config
         self.entities: List[Entity] = config.entities
         self.issues: List[Issue] = config.issues
         self.max_rounds: int = config.max_rounds
         self.protocol: str = config.protocol
         self.current_round: int = 0
+        self.rng: Generator = config.create_rng()
 
         # Transcript of rounds
         self.transcript: List[NegotiationRound] = []
 
     # ---------- Core Run ----------
     def run(self) -> NegotiationOutcome:
+        """Execute the configured negotiation protocol until termination.
+
+        Returns:
+            NegotiationOutcome: Final outcome containing agreement information
+            and the complete transcript of offers.
+
+        Side Effects:
+            Mutates ``self.transcript`` and internal round counters as the
+            negotiation progresses.
+        """
+
         if self.protocol == "alternating":
             return self._run_alternating()
         elif self.protocol == "simultaneous":
@@ -63,7 +80,7 @@ class NegotiationEngine:
             self.current_round = r
             proposer = self.entities[proposer_index]
             offer_values = proposer.policy.make_offer(
-                r, self._flatten_history(), proposer.utility_function, self.issues
+                r, self._flatten_history(), proposer.utility_function, self.issues, rng=self.rng
             )
             offer = self._evaluate_offer(offer_values, proposer.name)
 
@@ -119,7 +136,7 @@ class NegotiationEngine:
             # Each entity proposes
             for entity in self.entities:
                 values = entity.policy.make_offer(
-                    r, self._flatten_history(), entity.utility_function, self.issues
+                    r, self._flatten_history(), entity.utility_function, self.issues, rng=self.rng
                 )
                 offers.append(self._evaluate_offer(values, entity.name))
 
@@ -172,9 +189,9 @@ class NegotiationEngine:
 
         for r in range(1, self.max_rounds + 1):
             self.current_round = r
-            proposer = random.choice(self.entities)
+            proposer = self.rng.choice(self.entities)
             values = proposer.policy.make_offer(
-                r, self._flatten_history(), proposer.utility_function, self.issues
+                r, self._flatten_history(), proposer.utility_function, self.issues, rng=self.rng
             )
             offer = self._evaluate_offer(values, proposer.name)
 
@@ -243,7 +260,9 @@ class NegotiationEngine:
         if success and agreement is not None:
             if getattr(self.config, "track_pareto", False):
                 try:
-                    pareto_opt = is_pareto_optimal(agreement, self.entities, self.issues, samples=100)
+                    pareto_opt = is_pareto_optimal(
+                        agreement, self.entities, self.issues, samples=100, rng=self.rng
+                    )
                 except Exception:
                     pareto_opt = None
             if getattr(self.config, "calculate_nash", False):
@@ -266,13 +285,41 @@ class NegotiationEngine:
 
 
 class BatchNegotiationRunner:
-    """Run many negotiations and analyze outcomes."""
+    """Execute repeated negotiation simulations and summarize outcomes."""
 
     def __init__(self, base_config: SimulationConfig):
+        """Store the base configuration used for repeated simulations.
+
+        Args:
+            base_config: Prototype configuration used as the starting point for
+                each batch run.
+
+        Side Effects:
+            Initializes the internal results list to track aggregated
+            negotiation outcomes.
+        """
+
         self.base_config = base_config
         self.results: List[NegotiationOutcome] = []
 
     def run_batch(self, n_runs: int, vary_params: Optional[Dict] = None) -> List[NegotiationOutcome]:
+        """Run multiple negotiations while optionally varying parameters.
+
+        Args:
+            n_runs: Number of simulations to execute.
+            vary_params: Optional mapping of policy parameter names to boolean
+                flags indicating whether random perturbations should be
+                applied.
+
+        Returns:
+            List[NegotiationOutcome]: Collection of outcomes produced by each
+            simulation run.
+
+        Side Effects:
+            Resets and populates :attr:`results` with the outcomes from the
+            executed simulations.
+        """
+
         self.results = []
         for i in range(n_runs):
             config = self._apply_variations(self.base_config, vary_params, seed=i)
@@ -281,6 +328,17 @@ class BatchNegotiationRunner:
         return self.results
 
     def analyze_results(self) -> Dict[str, float]:
+        """Compute summary statistics for the previously executed runs.
+
+        Returns:
+            Dict[str, float]: Aggregated metrics such as success rate, average
+            rounds, and Pareto optimality rate. Returns zeros when no results
+            are available.
+
+        Side Effects:
+            None.
+        """
+
         if not self.results:
             return {"success_rate": 0.0, "average_rounds": 0.0, "total_runs": 0, "pareto_optimal_rate": 0.0}
 
@@ -321,7 +379,8 @@ class BatchNegotiationRunner:
         import copy
 
         new_cfg = copy.deepcopy(config)
-        rng = random.Random(seed)
+        combined_seed = seed if config.seed is None else config.seed + seed
+        rng = default_rng(combined_seed)
 
         for entity in new_cfg.entities:
             params = entity.policy.params
@@ -332,4 +391,5 @@ class BatchNegotiationRunner:
                 delta = rng.uniform(-0.02, 0.02)
                 params.concession_rate = float(np.clip(params.concession_rate + delta, 0.0, 1.0))
 
+        new_cfg.seed = combined_seed
         return new_cfg

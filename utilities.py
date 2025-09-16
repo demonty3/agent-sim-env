@@ -4,6 +4,7 @@ Includes Nash bargaining, Pareto optimality, and other game theory utilities.
 """
 
 import numpy as np
+from numpy.random import Generator, default_rng
 from typing import Dict, List, Tuple, Optional, Set
 from itertools import product, combinations
 from models import Entity, Issue, Offer, UtilityFunction
@@ -13,7 +14,20 @@ from models import Entity, Issue, Offer, UtilityFunction
 
 def calculate_joint_utility(offer: Dict[str, float],
                            entities: List[Entity]) -> float:
-    """Calculate the sum of utilities across all entities."""
+    """Compute the total utility that a set of entities assigns to an offer.
+
+    Args:
+        offer: Proposed values keyed by issue name.
+        entities: Negotiating entities whose utility functions will be
+            evaluated.
+
+    Returns:
+        float: Sum of individual utilities across all provided entities.
+
+    Side Effects:
+        None.
+    """
+
     total = 0.0
     for entity in entities:
         total += entity.utility_function.calculate_utility(offer)
@@ -22,10 +36,21 @@ def calculate_joint_utility(offer: Dict[str, float],
 
 def calculate_nash_product(offer: Dict[str, float],
                           entities: List[Entity]) -> float:
+    """Evaluate the Nash bargaining product for a proposed offer.
+
+    Args:
+        offer: Candidate agreement described as issue-to-value mapping.
+        entities: Participants whose utilities and reservation values inform
+            the Nash product.
+
+    Returns:
+        float: Product of the utility gains above reservation utilities across
+        all entities.
+
+    Side Effects:
+        None.
     """
-    Calculate Nash bargaining solution product.
-    Product of (utility - reservation) for all entities.
-    """
+
     product = 1.0
     for entity in entities:
         utility = entity.utility_function.calculate_utility(offer)
@@ -46,11 +71,33 @@ def calculate_nash_product(offer: Dict[str, float],
 
 def find_nash_bargaining_solution(entities: List[Entity],
                                  issues: List[Issue],
-                                 samples: int = 1000) -> Dict[str, float]:
+<<<<<<< HEAD
+                                 samples: int = 1000,
+                                 rng: Optional[Generator] = None) -> Dict[str, float]:
     """
     Find approximate Nash bargaining solution through sampling.
     Returns the offer that maximizes the Nash product.
     """
+    rng = default_rng() if rng is None else rng
+=======
+                                 samples: int = 1000) -> Optional[Dict[str, float]]:
+    """Approximate the Nash bargaining solution via random sampling.
+
+    Args:
+        entities: Negotiating parties whose preferences define the solution.
+        issues: Set of issues over which offers are generated.
+        samples: Number of random offers to evaluate.
+
+    Returns:
+        Optional[Dict[str, float]]: Offer yielding the highest Nash product
+        across the sampled space, or ``None`` if sampling fails to produce an
+        offer.
+
+    Side Effects:
+        Draws samples from NumPy's random number generator.
+    """
+
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     best_offer = None
     best_nash_product = -1
 
@@ -59,11 +106,11 @@ def find_nash_bargaining_solution(entities: List[Entity],
         offer = {}
         for issue in issues:
             if issue.divisible:
-                value = np.random.uniform(issue.min_value, issue.max_value)
+                value = rng.uniform(issue.min_value, issue.max_value)
             else:
                 # For indivisible issues, pick discrete values
-                value = np.random.choice([issue.min_value, issue.max_value])
-            offer[issue.name] = value
+                value = rng.choice([issue.min_value, issue.max_value])
+            offer[issue.name] = float(value)
 
         # Calculate Nash product
         nash_product = calculate_nash_product(offer, entities)
@@ -80,11 +127,21 @@ def find_nash_bargaining_solution(entities: List[Entity],
 def is_pareto_dominated(offer1: Dict[str, float],
                         offer2: Dict[str, float],
                         entities: List[Entity]) -> bool:
+    """Determine whether ``offer1`` is Pareto dominated by ``offer2``.
+
+    Args:
+        offer1: Baseline offer to test for dominance.
+        offer2: Candidate offer that may dominate ``offer1``.
+        entities: Participants whose utilities are compared.
+
+    Returns:
+        bool: ``True`` if ``offer2`` is at least as good for every entity and
+        strictly better for at least one entity.
+
+    Side Effects:
+        None.
     """
-    Check if offer1 is Pareto dominated by offer2.
-    offer2 dominates offer1 if it's at least as good for everyone
-    and strictly better for at least one entity.
-    """
+
     at_least_as_good = True
     strictly_better_for_someone = False
 
@@ -103,10 +160,20 @@ def is_pareto_dominated(offer1: Dict[str, float],
 
 def find_pareto_frontier(offers: List[Dict[str, float]],
                         entities: List[Entity]) -> List[Dict[str, float]]:
+    """Extract the subset of non-dominated offers from a candidate set.
+
+    Args:
+        offers: Offers to evaluate for Pareto dominance.
+        entities: Participants whose utilities define dominance.
+
+    Returns:
+        List[Dict[str, float]]: Offers that are not dominated by any other
+        offer in the provided list.
+
+    Side Effects:
+        None.
     """
-    Find the Pareto frontier from a set of offers.
-    Returns offers that are not dominated by any other offer.
-    """
+
     frontier = []
 
     for i, offer in enumerate(offers):
@@ -125,10 +192,33 @@ def find_pareto_frontier(offers: List[Dict[str, float]],
 def is_pareto_optimal(offer: Dict[str, float],
                      entities: List[Entity],
                      issues: List[Issue],
-                     samples: int = 100) -> bool:
+<<<<<<< HEAD
+                     samples: int = 100,
+                     rng: Optional[Generator] = None) -> bool:
     """
     Check if an offer is approximately Pareto optimal through sampling.
     """
+    rng = default_rng() if rng is None else rng
+=======
+                     samples: int = 100) -> bool:
+    """Assess Pareto optimality of an offer via randomized search.
+
+    Args:
+        offer: Candidate offer to evaluate.
+        entities: Participants whose utilities are compared.
+        issues: Negotiated issues defining the sampling space.
+        samples: Number of neighboring offers to sample when searching for
+            improvements.
+
+    Returns:
+        bool: ``True`` if no sampled offer Pareto dominates the candidate;
+        ``False`` otherwise.
+
+    Side Effects:
+        Draws random values from NumPy when generating neighboring offers.
+    """
+
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     current_utilities = [e.utility_function.calculate_utility(offer) for e in entities]
 
     # Try to find a Pareto improvement
@@ -138,18 +228,20 @@ def is_pareto_optimal(offer: Dict[str, float],
         for issue in issues:
             if issue.divisible:
                 # Small perturbation
-                delta = np.random.normal(0, (issue.max_value - issue.min_value) * 0.1)
+                delta = rng.normal(0, (issue.max_value - issue.min_value) * 0.1)
                 value = offer.get(issue.name, (issue.max_value + issue.min_value) / 2) + delta
                 value = np.clip(value, issue.min_value, issue.max_value)
             else:
                 value = offer.get(issue.name, issue.min_value)
-            new_offer[issue.name] = value
+            new_offer[issue.name] = float(value)
 
         # Check if this is a Pareto improvement
         new_utilities = [e.utility_function.calculate_utility(new_offer) for e in entities]
 
-        if all(nu >= cu for nu, cu in zip(new_utilities, current_utilities)) and \
-           any(nu > cu for nu, cu in zip(new_utilities, current_utilities)):
+        if (
+            all(nu >= cu for nu, cu in zip(new_utilities, current_utilities))
+            and any(nu > cu for nu, cu in zip(new_utilities, current_utilities))
+        ):
             return False  # Found a Pareto improvement
 
     return True  # No Pareto improvement found
@@ -159,11 +251,32 @@ def is_pareto_optimal(offer: Dict[str, float],
 
 def find_zopa(entities: List[Entity],
               issues: List[Issue],
-              samples: int = 1000) -> List[Dict[str, float]]:
+<<<<<<< HEAD
+              samples: int = 1000,
+              rng: Optional[Generator] = None) -> List[Dict[str, float]]:
     """
     Find the Zone of Possible Agreement (ZOPA).
     Returns offers where all parties get at least their reservation utility.
     """
+    rng = default_rng() if rng is None else rng
+=======
+              samples: int = 1000) -> List[Dict[str, float]]:
+    """Estimate the Zone of Possible Agreement (ZOPA) by random sampling.
+
+    Args:
+        entities: Negotiating parties whose reservation utilities must be met.
+        issues: Issues describing the negotiation space.
+        samples: Number of random offers to generate.
+
+    Returns:
+        List[Dict[str, float]]: Offers that satisfy every entity's reservation
+        utility.
+
+    Side Effects:
+        Draws samples from NumPy's random generator.
+    """
+
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     zopa = []
 
     for _ in range(samples):
@@ -171,10 +284,10 @@ def find_zopa(entities: List[Entity],
         offer = {}
         for issue in issues:
             if issue.divisible:
-                value = np.random.uniform(issue.min_value, issue.max_value)
+                value = rng.uniform(issue.min_value, issue.max_value)
             else:
-                value = np.random.choice([issue.min_value, issue.max_value])
-            offer[issue.name] = value
+                value = rng.choice([issue.min_value, issue.max_value])
+            offer[issue.name] = float(value)
 
         # Check if all entities meet their reservation
         all_satisfied = True
@@ -194,10 +307,20 @@ def find_zopa(entities: List[Entity],
 
 def calculate_kalai_smorodinsky(entities: List[Entity],
                                offer: Dict[str, float]) -> float:
+    """Measure deviation from the Kalai-Smorodinsky proportionality ideal.
+
+    Args:
+        entities: Negotiating participants whose utilities are analyzed.
+        offer: Candidate offer whose fairness is being measured.
+
+    Returns:
+        float: Standard deviation of proportional gains; lower values indicate
+        offers closer to the Kalai-Smorodinsky solution.
+
+    Side Effects:
+        None.
     """
-    Calculate distance from Kalai-Smorodinsky solution.
-    K-S solution maintains proportional gains from disagreement.
-    """
+
     utilities = []
     max_utilities = []
 
@@ -225,10 +348,19 @@ def calculate_kalai_smorodinsky(entities: List[Entity],
 
 def calculate_egalitarian_score(entities: List[Entity],
                                offer: Dict[str, float]) -> float:
+    """Compute the egalitarian score (maximin utility) for an offer.
+
+    Args:
+        entities: Negotiating entities whose utilities are considered.
+        offer: Offer used to evaluate fairness.
+
+    Returns:
+        float: Minimum utility value across all entities.
+
+    Side Effects:
+        None.
     """
-    Calculate egalitarian (maximin) score.
-    Maximizes the minimum utility among all parties.
-    """
+
     utilities = [e.utility_function.calculate_utility(offer) for e in entities]
     return min(utilities)
 
@@ -237,7 +369,20 @@ def calculate_egalitarian_score(entities: List[Entity],
 
 def generate_midpoint_offer(entities: List[Entity],
                            issues: List[Issue]) -> Dict[str, float]:
-    """Generate an offer at the midpoint of all ideal values."""
+    """Construct an offer at the midpoint of participants' ideal values.
+
+    Args:
+        entities: Entities contributing ideal values for each issue.
+        issues: Issues that must appear in the generated offer.
+
+    Returns:
+        Dict[str, float]: Offer with each issue set to the average of entity
+        ideal values.
+
+    Side Effects:
+        None.
+    """
+
     offer = {}
 
     for issue in issues:
@@ -252,10 +397,21 @@ def generate_midpoint_offer(entities: List[Entity],
 def generate_weighted_offer(entities: List[Entity],
                            issues: List[Issue],
                            weights: Dict[str, float]) -> Dict[str, float]:
+    """Create an offer that respects externally supplied entity weights.
+
+    Args:
+        entities: Entities contributing their ideal values.
+        issues: Issues to include in the generated offer.
+        weights: Mapping from entity name to relative influence weight.
+
+    Returns:
+        Dict[str, float]: Offer where each issue value is a weighted average of
+        entity ideals.
+
+    Side Effects:
+        None.
     """
-    Generate offer weighted by entity importance.
-    weights: entity_name -> weight
-    """
+
     offer = {}
     total_weight = sum(weights.values())
 
@@ -275,13 +431,34 @@ def generate_weighted_offer(entities: List[Entity],
 
 def analyze_negotiation_space(entities: List[Entity],
                              issues: List[Issue],
-                             samples: int = 1000) -> Dict:
+<<<<<<< HEAD
+                             samples: int = 1000,
+                             rng: Optional[Generator] = None) -> Dict:
     """
     Comprehensive analysis of the negotiation space.
     Returns statistics about ZOPA, Pareto frontier, Nash solution, etc.
     """
+    rng = default_rng() if rng is None else rng
+=======
+                             samples: int = 1000) -> Dict:
+    """Collect coarse statistics about the negotiation landscape.
+
+    Args:
+        entities: Participants whose utilities shape the outcome space.
+        issues: Negotiated issues defining feasible offers.
+        samples: Number of random samples used for exploratory analysis.
+
+    Returns:
+        Dict: Summary including ZOPA characteristics, Pareto frontier size,
+        Nash solution, and aggregate utilities.
+
+    Side Effects:
+        Consumes random samples via NumPy to explore the offer space.
+    """
+
+>>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     # Find ZOPA
-    zopa = find_zopa(entities, issues, samples)
+    zopa = find_zopa(entities, issues, samples, rng=rng)
 
     if not zopa:
         return {
@@ -295,7 +472,7 @@ def analyze_negotiation_space(entities: List[Entity],
     pareto_frontier = find_pareto_frontier(zopa[:100], entities)  # Limit for performance
 
     # Find Nash solution
-    nash_solution = find_nash_bargaining_solution(entities, issues, samples)
+    nash_solution = find_nash_bargaining_solution(entities, issues, samples, rng=rng)
 
     # Calculate average utilities in ZOPA
     avg_utilities = {}
@@ -319,15 +496,27 @@ def analyze_negotiation_space(entities: List[Entity],
     }
 
 
+
+
 def calculate_bargaining_power(entity: Entity,
                               all_entities: List[Entity],
                               issues: List[Issue]) -> float:
+    """Estimate an entity's bargaining power from several heuristics.
+
+    Args:
+        entity: Entity whose bargaining power is being scored.
+        all_entities: All participants, currently unused but allows contextual
+            extensions.
+        issues: Issues that determine reservation utilities and flexibility.
+
+    Returns:
+        float: Composite power score where higher values imply stronger
+        bargaining positions.
+
+    Side Effects:
+        None.
     """
-    Estimate bargaining power based on:
-    - BATNA (reservation values)
-    - Patience
-    - Issue flexibility
-    """
+
     power_score = 0.0
 
     # 1. BATNA strength (higher reservation = more power)
@@ -357,10 +546,20 @@ def calculate_bargaining_power(entity: Entity,
 
 def find_stable_coalitions(entities: List[Entity],
                           issues: List[Issue]) -> List[Set[str]]:
+    """Identify coalitions whose members all benefit from collaborating.
+
+    Args:
+        entities: All available entities that may form coalitions.
+        issues: Issues considered when evaluating coalition offers.
+
+    Returns:
+        List[Set[str]]: Coalitions where every member achieves at least their
+        minimum acceptable utility.
+
+    Side Effects:
+        None.
     """
-    Find coalitions that could form stable agreements.
-    Uses simplified core concept from cooperative game theory.
-    """
+
     stable_coalitions = []
     n = len(entities)
 
@@ -391,10 +590,20 @@ def find_stable_coalitions(entities: List[Entity],
 
 def calculate_concession_rate(history: List[Offer],
                              entity_name: str) -> float:
+    """Estimate the average utility loss per round for an entity.
+
+    Args:
+        history: Complete offer history from a negotiation.
+        entity_name: Name of the entity whose concessions are analyzed.
+
+    Returns:
+        float: Average decrease in utility between consecutive offers made by
+        the entity. Returns ``0.0`` when insufficient data is available.
+
+    Side Effects:
+        None.
     """
-    Calculate how fast an entity is conceding based on offer history.
-    Returns average utility loss per round.
-    """
+
     entity_offers = [o for o in history if o.proposer == entity_name]
 
     if len(entity_offers) < 2:
@@ -410,10 +619,20 @@ def calculate_concession_rate(history: List[Offer],
 
 def predict_convergence_round(entities: List[Entity],
                              history: List[Offer]) -> Optional[int]:
+    """Forecast the round where utilities may converge across entities.
+
+    Args:
+        entities: Participants whose concession rates are examined.
+        history: Full list of offers exchanged during the negotiation.
+
+    Returns:
+        Optional[int]: Estimated future round number where utilities align, or
+        ``None`` when convergence cannot be inferred.
+
+    Side Effects:
+        None.
     """
-    Predict when negotiation might converge based on concession rates.
-    Returns estimated round number or None if no convergence predicted.
-    """
+
     if len(history) < 3:
         return None
 

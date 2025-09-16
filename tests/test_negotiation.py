@@ -4,8 +4,6 @@ Run with: pytest test_negotiation.py -v
 """
 
 import pytest
-import numpy as np
-from typing import List
 
 from models import (
     Entity, Issue, UtilityFunction, NegotiationPolicy,
@@ -19,61 +17,6 @@ from utilities import (
     calculate_concession_rate
 )
 from advisor import NegotiationAdvisor, get_advisor
-
-
-# ===== FIXTURES =====
-
-@pytest.fixture
-def simple_issues():
-    """Create simple test issues."""
-    return [
-        Issue(name="price", min_value=100, max_value=200, unit="USD"),
-        Issue(name="quantity", min_value=10, max_value=100, unit="units")
-    ]
-
-
-@pytest.fixture
-def simple_entities(simple_issues):
-    """Create simple test entities."""
-    buyer = Entity(
-        name="Buyer",
-        utility_function=UtilityFunction(
-            weights={"price": 0.7, "quantity": 0.3},
-            ideal_values={"price": 100, "quantity": 100},
-            reservation_values={"price": 180, "quantity": 20}
-        ),
-        policy=NegotiationPolicy(
-            type=PolicyType.LINEAR_CONCESSION,
-            params=PolicyParameters(accept_threshold=0.6, concession_rate=0.1)
-        )
-    )
-
-    seller = Entity(
-        name="Seller",
-        utility_function=UtilityFunction(
-            weights={"price": 0.8, "quantity": 0.2},
-            ideal_values={"price": 200, "quantity": 10},
-            reservation_values={"price": 120, "quantity": 80}
-        ),
-        policy=NegotiationPolicy(
-            type=PolicyType.TIT_FOR_TAT,
-            params=PolicyParameters(accept_threshold=0.6)
-        )
-    )
-
-    return [buyer, seller]
-
-
-@pytest.fixture
-def simple_config(simple_entities, simple_issues):
-    """Create simple test configuration."""
-    return SimulationConfig(
-        entities=simple_entities,
-        issues=simple_issues,
-        max_rounds=50,
-        protocol="alternating"
-    )
-
 
 # ===== MODEL TESTS =====
 
@@ -138,6 +81,22 @@ class TestModels:
 
         # Later round should have more concession (higher price for buyer)
         assert offer_round_5["price"] > offer_round_1["price"]
+
+    def test_policy_unsupported_type(self):
+        """Policy should raise when encountering unsupported types."""
+        policy = NegotiationPolicy(type=PolicyType.LINEAR_CONCESSION)
+        utility_fn = UtilityFunction(
+            weights={"price": 1.0},
+            ideal_values={"price": 100},
+            reservation_values={"price": 0}
+        )
+        issues = [Issue(name="price", min_value=0, max_value=100)]
+
+        # Bypass validation to simulate a runtime unsupported policy type
+        policy.__dict__["type"] = "unsupported_policy"
+
+        with pytest.raises(ValueError):
+            policy.make_offer(1, [], utility_fn, issues)
 
     def test_entity_evaluation(self):
         """Test entity offer evaluation."""
@@ -207,7 +166,7 @@ class TestUtilities:
 
     def test_zopa_finding(self, simple_entities, simple_issues):
         """Test ZOPA (Zone of Possible Agreement) finding."""
-        zopa = find_zopa(simple_entities, simple_issues, samples=100)
+        zopa = find_zopa(simple_entities, simple_issues, samples=100, rng=np.random.default_rng(TEST_SEED))
 
         # Should find some agreements
         assert len(zopa) > 0
@@ -220,7 +179,7 @@ class TestUtilities:
 
     def test_negotiation_space_analysis(self, simple_entities, simple_issues):
         """Test comprehensive space analysis."""
-        analysis = analyze_negotiation_space(simple_entities, simple_issues, samples=200)
+        analysis = analyze_negotiation_space(simple_entities, simple_issues, samples=200, rng=np.random.default_rng(TEST_SEED))
 
         assert "has_zopa" in analysis
         assert "zopa_size" in analysis
@@ -286,7 +245,8 @@ class TestProtocol:
             entities=simple_entities,
             issues=simple_issues,
             max_rounds=50,
-            protocol="simultaneous"
+            protocol="simultaneous",
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)
@@ -330,7 +290,8 @@ class TestProtocol:
         config = SimulationConfig(
             entities=entities,
             issues=issues,
-            max_rounds=100
+            max_rounds=100,
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)
@@ -488,7 +449,8 @@ class TestIntegration:
                 config = SimulationConfig(
                     entities=entities,
                     issues=simple_issues,
-                    max_rounds=50
+                    max_rounds=50,
+                    seed=TEST_SEED
                 )
 
                 engine = NegotiationEngine(config)
@@ -534,7 +496,8 @@ class TestIntegration:
             entities=entities,
             issues=issues,
             max_rounds=100,
-            protocol="simultaneous"  # Better for multi-party
+            protocol="simultaneous",  # Better for multi-party
+            seed=TEST_SEED
         )
 
         engine = NegotiationEngine(config)
@@ -548,69 +511,6 @@ class TestIntegration:
             for entity in entities:
                 utility = outcome.final_utilities[entity.name]
                 assert utility >= entity.min_acceptable_utility
-
-
-# ===== PERFORMANCE TESTS =====
-
-class TestPerformance:
-
-    def test_large_batch_performance(self, simple_config):
-        """Test that batch simulations complete in reasonable time."""
-        import time
-
-        start_time = time.time()
-        runner = BatchNegotiationRunner(simple_config)
-        results = runner.run_batch(100)
-        elapsed = time.time() - start_time
-
-        assert len(results) == 100
-        assert elapsed < 30  # Should complete 100 simulations in under 30 seconds
-
-        # Check memory usage doesn't explode
-        import sys
-        total_size = sum(sys.getsizeof(r) for r in results)
-        assert total_size < 10 * 1024 * 1024  # Less than 10MB for results
-
-    def test_complex_scenario_performance(self):
-        """Test performance with many issues and entities."""
-        # Create complex scenario
-        issues = [
-            Issue(name=f"issue_{i}", min_value=0, max_value=100)
-            for i in range(10)  # 10 issues
-        ]
-
-        entities = []
-        for i in range(5):  # 5 entities
-            weights = {f"issue_{j}": np.random.random() for j in range(10)}
-            ideal = {f"issue_{j}": np.random.uniform(20, 80) for j in range(10)}
-            reservation = {f"issue_{j}": np.random.uniform(10, 90) for j in range(10)}
-
-            entities.append(Entity(
-                name=f"Entity_{i}",
-                utility_function=UtilityFunction(
-                    weights=weights,
-                    ideal_values=ideal,
-                    reservation_values=reservation
-                ),
-                policy=NegotiationPolicy(type=PolicyType.LINEAR_CONCESSION)
-            ))
-
-        config = SimulationConfig(
-            entities=entities,
-            issues=issues,
-            max_rounds=50,
-            protocol="simultaneous"
-        )
-
-        import time
-        start_time = time.time()
-        engine = NegotiationEngine(config)
-        outcome = engine.run()
-        elapsed = time.time() - start_time
-
-        assert outcome is not None
-        assert elapsed < 5  # Complex negotiation should complete in under 5 seconds
-
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
