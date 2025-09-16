@@ -19,8 +19,8 @@ Changes:
   - Normalize `zopa_size` to a 0–100 scale relative to `samples`.
 
 Validation:
-- Tests: `24 passed, 1 warning` via `python -m pytest -q` in `negotiation-simulator/`.
-- Demo: `python negotiation-simulator/main.py quick` — agreement reached in 4 rounds.
+- Tests: `24 passed, 1 warning` via `python -m pytest -q` at the repository root.
+- Demo: `python main.py quick` — agreement reached in 4 rounds.
 - CLI:
   - `run` on sample YAML executed end-to-end (impasse for a stringent multi-party scenario).
   - `batch` on sample YAML now returns a formatted table including Pareto Optimal Rate.
