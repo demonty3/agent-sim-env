@@ -4,6 +4,7 @@ Run with: pytest test_negotiation.py -v
 """
 
 import pytest
+import numpy as np
 
 from models import (
     Entity, Issue, UtilityFunction, NegotiationPolicy,
@@ -17,6 +18,9 @@ from utilities import (
     calculate_concession_rate
 )
 from advisor import NegotiationAdvisor, get_advisor
+
+# Deterministic RNG seed for reproducible sampling in tests
+TEST_SEED = 42
 
 # ===== MODEL TESTS =====
 

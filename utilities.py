@@ -69,35 +69,17 @@ def calculate_nash_product(offer: Dict[str, float],
     return product
 
 
-def find_nash_bargaining_solution(entities: List[Entity],
-                                 issues: List[Issue],
-<<<<<<< HEAD
-                                 samples: int = 1000,
-                                 rng: Optional[Generator] = None) -> Dict[str, float]:
-    """
-    Find approximate Nash bargaining solution through sampling.
-    Returns the offer that maximizes the Nash product.
-    """
-    rng = default_rng() if rng is None else rng
-=======
-                                 samples: int = 1000) -> Optional[Dict[str, float]]:
+def find_nash_bargaining_solution(
+    entities: List[Entity],
+    issues: List[Issue],
+    samples: int = 1000,
+    rng: Optional[Generator] = None,
+) -> Dict[str, float]:
     """Approximate the Nash bargaining solution via random sampling.
 
-    Args:
-        entities: Negotiating parties whose preferences define the solution.
-        issues: Set of issues over which offers are generated.
-        samples: Number of random offers to evaluate.
-
-    Returns:
-        Optional[Dict[str, float]]: Offer yielding the highest Nash product
-        across the sampled space, or ``None`` if sampling fails to produce an
-        offer.
-
-    Side Effects:
-        Draws samples from NumPy's random number generator.
+    Returns the sampled offer that maximizes the Nash product.
     """
-
->>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
+    rng = default_rng() if rng is None else rng
     best_offer = None
     best_nash_product = -1
 
@@ -189,36 +171,15 @@ def find_pareto_frontier(offers: List[Dict[str, float]],
     return frontier
 
 
-def is_pareto_optimal(offer: Dict[str, float],
-                     entities: List[Entity],
-                     issues: List[Issue],
-<<<<<<< HEAD
-                     samples: int = 100,
-                     rng: Optional[Generator] = None) -> bool:
-    """
-    Check if an offer is approximately Pareto optimal through sampling.
-    """
+def is_pareto_optimal(
+    offer: Dict[str, float],
+    entities: List[Entity],
+    issues: List[Issue],
+    samples: int = 100,
+    rng: Optional[Generator] = None,
+) -> bool:
+    """Assess Pareto optimality of an offer via randomized search."""
     rng = default_rng() if rng is None else rng
-=======
-                     samples: int = 100) -> bool:
-    """Assess Pareto optimality of an offer via randomized search.
-
-    Args:
-        offer: Candidate offer to evaluate.
-        entities: Participants whose utilities are compared.
-        issues: Negotiated issues defining the sampling space.
-        samples: Number of neighboring offers to sample when searching for
-            improvements.
-
-    Returns:
-        bool: ``True`` if no sampled offer Pareto dominates the candidate;
-        ``False`` otherwise.
-
-    Side Effects:
-        Draws random values from NumPy when generating neighboring offers.
-    """
-
->>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     current_utilities = [e.utility_function.calculate_utility(offer) for e in entities]
 
     # Try to find a Pareto improvement
@@ -249,34 +210,14 @@ def is_pareto_optimal(offer: Dict[str, float],
 
 # ===== ZONE OF POSSIBLE AGREEMENT (ZOPA) =====
 
-def find_zopa(entities: List[Entity],
-              issues: List[Issue],
-<<<<<<< HEAD
-              samples: int = 1000,
-              rng: Optional[Generator] = None) -> List[Dict[str, float]]:
-    """
-    Find the Zone of Possible Agreement (ZOPA).
-    Returns offers where all parties get at least their reservation utility.
-    """
+def find_zopa(
+    entities: List[Entity],
+    issues: List[Issue],
+    samples: int = 1000,
+    rng: Optional[Generator] = None,
+) -> List[Dict[str, float]]:
+    """Estimate the Zone of Possible Agreement (ZOPA) by random sampling."""
     rng = default_rng() if rng is None else rng
-=======
-              samples: int = 1000) -> List[Dict[str, float]]:
-    """Estimate the Zone of Possible Agreement (ZOPA) by random sampling.
-
-    Args:
-        entities: Negotiating parties whose reservation utilities must be met.
-        issues: Issues describing the negotiation space.
-        samples: Number of random offers to generate.
-
-    Returns:
-        List[Dict[str, float]]: Offers that satisfy every entity's reservation
-        utility.
-
-    Side Effects:
-        Draws samples from NumPy's random generator.
-    """
-
->>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     zopa = []
 
     for _ in range(samples):
@@ -429,34 +370,14 @@ def generate_weighted_offer(entities: List[Entity],
 
 # ===== ANALYSIS FUNCTIONS =====
 
-def analyze_negotiation_space(entities: List[Entity],
-                             issues: List[Issue],
-<<<<<<< HEAD
-                             samples: int = 1000,
-                             rng: Optional[Generator] = None) -> Dict:
-    """
-    Comprehensive analysis of the negotiation space.
-    Returns statistics about ZOPA, Pareto frontier, Nash solution, etc.
-    """
+def analyze_negotiation_space(
+    entities: List[Entity],
+    issues: List[Issue],
+    samples: int = 1000,
+    rng: Optional[Generator] = None,
+) -> Dict:
+    """Collect coarse statistics about the negotiation landscape."""
     rng = default_rng() if rng is None else rng
-=======
-                             samples: int = 1000) -> Dict:
-    """Collect coarse statistics about the negotiation landscape.
-
-    Args:
-        entities: Participants whose utilities shape the outcome space.
-        issues: Negotiated issues defining feasible offers.
-        samples: Number of random samples used for exploratory analysis.
-
-    Returns:
-        Dict: Summary including ZOPA characteristics, Pareto frontier size,
-        Nash solution, and aggregate utilities.
-
-    Side Effects:
-        Consumes random samples via NumPy to explore the offer space.
-    """
-
->>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
     # Find ZOPA
     zopa = find_zopa(entities, issues, samples, rng=rng)
 

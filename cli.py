@@ -32,13 +32,16 @@ def run(
     config_file: Path = typer.Argument(..., help="Path to YAML configuration file"),
     output: Optional[Path] = typer.Option(None, help="Output file for results"),
     visualize: bool = typer.Option(False, "--viz", help="Show visualization"),
-    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output")
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility"),
 ):
     """Run a single negotiation simulation."""
 
     # Load configuration
     console.print(f"[cyan]Loading configuration from {config_file}...[/cyan]")
     config = load_config(config_file)
+    if seed is not None:
+        config.seed = seed
 
     # Run negotiation
     console.print("[yellow]Starting negotiation...[/yellow]")
@@ -63,12 +66,15 @@ def batch(
     config_file: Path = typer.Argument(..., help="Path to YAML configuration file"),
     n_runs: int = typer.Option(100, help="Number of simulations to run"),
     output: Optional[Path] = typer.Option(None, help="Output file for results"),
-    vary: Optional[str] = typer.Option(None, help="Parameters to vary (JSON format)")
+    vary: Optional[str] = typer.Option(None, help="Parameters to vary (JSON format)"),
+    seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility"),
 ):
     """Run batch simulations with parameter variations."""
 
     # Load configuration
     config = load_config(config_file)
+    if seed is not None:
+        config.seed = seed
 
     # Parse variation parameters
     vary_params = None
@@ -98,7 +104,8 @@ def batch(
 @app.command()
 def analyze(
     config_file: Path = typer.Argument(..., help="Path to YAML configuration file"),
-    samples: int = typer.Option(1000, help="Number of samples for analysis")
+    samples: int = typer.Option(1000, help="Number of samples for analysis"),
+    seed: Optional[int] = typer.Option(None, help="Random seed for reproducibility"),
 ):
     """Analyze the negotiation space for a given configuration."""
 
@@ -108,10 +115,12 @@ def analyze(
     console.print(f"[yellow]Analyzing negotiation space with {samples} samples...[/yellow]")
 
     # Perform analysis
+    rng = np.random.default_rng(seed) if seed is not None else None
     analysis = analyze_negotiation_space(
         config.entities,
         config.issues,
-        samples=samples
+        samples=samples,
+        rng=rng,
     )
 
     # Display analysis
@@ -119,10 +128,111 @@ def analyze(
 
     # Find Nash solution
     if analysis['has_zopa']:
-        nash = find_nash_bargaining_solution(config.entities, config.issues, samples)
+        nash = find_nash_bargaining_solution(config.entities, config.issues, samples, rng=rng)
         console.print("\n[cyan]Nash Bargaining Solution:[/cyan]")
         for issue, value in nash.items():
             console.print(f"  {issue}: {value:.2f}")
+
+
+@app.command()
+def quickstart(
+    visualize: bool = typer.Option(False, "--viz", help="Show visualization"),
+    verbose: bool = typer.Option(True, "--verbose/--no-verbose", help="Verbose output"),
+    seed: Optional[int] = typer.Option(42, help="Random seed for reproducibility"),
+):
+    """Run a ready-made buyer/seller scenario (no files needed)."""
+    console.print("[cyan]Running quickstart buyer/seller scenario...[/cyan]")
+
+    # Build a simple scenario programmatically
+    buyer = Entity(
+        name="Buyer",
+        utility_function=UtilityFunction(
+            weights={"price": 0.7, "quantity": 0.3},
+            ideal_values={"price": 100, "quantity": 100},
+            reservation_values={"price": 180, "quantity": 20},
+        ),
+        policy=NegotiationPolicy(
+            type=PolicyType.LINEAR_CONCESSION,
+            params=PolicyParameters(accept_threshold=0.6, concession_rate=0.1),
+        ),
+    )
+    seller = Entity(
+        name="Seller",
+        utility_function=UtilityFunction(
+            weights={"price": 0.8, "quantity": 0.2},
+            ideal_values={"price": 200, "quantity": 10},
+            reservation_values={"price": 120, "quantity": 80},
+        ),
+        policy=NegotiationPolicy(type=PolicyType.TIT_FOR_TAT),
+    )
+    issues = [
+        Issue(name="price", min_value=100, max_value=200, unit="USD"),
+        Issue(name="quantity", min_value=10, max_value=100, unit="units"),
+    ]
+
+    config = SimulationConfig(
+        entities=[buyer, seller],
+        issues=issues,
+        max_rounds=50,
+        protocol="alternating",
+        seed=seed,
+    )
+
+    engine = NegotiationEngine(config)
+    outcome = engine.run()
+    display_outcome(outcome, verbose)
+
+    if visualize:
+        visualize_negotiation(outcome)
+
+
+@app.command()
+def init(
+    output: Path = typer.Argument(Path("negotiation.yaml"), help="Path for new YAML template"),
+):
+    """Create a starter YAML config in the current directory."""
+    if output.exists():
+        console.print(f"[red]File already exists: {output}[/red]")
+        raise typer.Exit(code=1)
+
+    template = {
+        'entities': [
+            {
+                'name': 'Buyer',
+                'type': 'company',
+                'utility': {
+                    'weights': {'price': 0.7, 'quantity': 0.3},
+                    'ideal_values': {'price': 100, 'quantity': 100},
+                    'reservation_values': {'price': 180, 'quantity': 20},
+                },
+                'policy': {
+                    'type': 'linear_concession',
+                    'params': {'accept_threshold': 0.6, 'concession_rate': 0.1},
+                },
+            },
+            {
+                'name': 'Seller',
+                'type': 'company',
+                'utility': {
+                    'weights': {'price': 0.8, 'quantity': 0.2},
+                    'ideal_values': {'price': 200, 'quantity': 10},
+                    'reservation_values': {'price': 120, 'quantity': 80},
+                },
+                'policy': {'type': 'tit_for_tat', 'params': {}},
+            },
+        ],
+        'issues': [
+            {'name': 'price', 'min_value': 100, 'max_value': 200, 'unit': 'USD'},
+            {'name': 'quantity', 'min_value': 10, 'max_value': 100, 'unit': 'units'},
+        ],
+        'max_rounds': 50,
+        'protocol': 'alternating',
+    }
+
+    with open(output, 'w') as f:
+        yaml.safe_dump(template, f, sort_keys=False)
+
+    console.print(f"[green]Created template config at {output}[/green]")
 
 
 @app.command()
