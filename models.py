@@ -121,12 +121,12 @@ class PolicyParameters(BaseModel):
     learning_rate: float = Field(0.1, ge=0, le=1)
     exploration_factor: float = Field(0.2, ge=0, le=1)
 
-    # Pydantic v2 style
-    if ConfigDict is not None:  # type: ignore[truthy-function]
+    # Configure extra fields depending on Pydantic major version
+    if ConfigDict is not None:  # Pydantic v2
         model_config = ConfigDict(extra='allow')  # type: ignore[misc]
-    # Pydantic v1 fallback
-    class Config:  # type: ignore[no-redef]
-        extra = 'allow'
+    else:  # Pydantic v1 fallback
+        class Config:  # type: ignore[no-redef]
+            extra = 'allow'
 
 
 class NegotiationPolicy(BaseModel):
