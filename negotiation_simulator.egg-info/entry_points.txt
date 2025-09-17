@@ -1,0 +1,3 @@
+[console_scripts]
+negotiate = cli:app
+negotiate-web = web_interface:main

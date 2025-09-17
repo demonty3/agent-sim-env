@@ -7,6 +7,11 @@ from functools import partial
 from dataclasses import dataclass, field
 from pydantic import BaseModel, Field
 try:
+    # Pydantic v2 config object
+    from pydantic import ConfigDict  # type: ignore
+except Exception:  # pragma: no cover
+    ConfigDict = None  # type: ignore
+try:
     # Pydantic v2
     from pydantic import model_validator  # type: ignore
 except Exception:  # pragma: no cover
@@ -116,8 +121,12 @@ class PolicyParameters(BaseModel):
     learning_rate: float = Field(0.1, ge=0, le=1)
     exploration_factor: float = Field(0.2, ge=0, le=1)
 
-    class Config:
-        extra = 'allow'
+    # Configure extra fields depending on Pydantic major version
+    if ConfigDict is not None:  # Pydantic v2
+        model_config = ConfigDict(extra='allow')  # type: ignore[misc]
+    else:  # Pydantic v1 fallback
+        class Config:  # type: ignore[no-redef]
+            extra = 'allow'
 
 
 class NegotiationPolicy(BaseModel):
@@ -126,7 +135,6 @@ class NegotiationPolicy(BaseModel):
     type: PolicyType
     params: PolicyParameters = Field(default_factory=PolicyParameters)
 
-<<<<<<< HEAD
     def make_offer(
         self,
         round_num: int,
@@ -135,39 +143,27 @@ class NegotiationPolicy(BaseModel):
         issues: List[Issue],
         rng: Optional[Generator] = None,
     ) -> Dict[str, float]:
+        """Dispatch to the concrete offer-generation strategy.
+
+        Accepts an optional RNG to support deterministic sampling in
+        strategies that use randomness (e.g., ADAPTIVE).
+        """
         if rng is None:
             rng = default_rng()
 
-        if self.type == PolicyType.LINEAR_CONCESSION:
-            return self._linear_concession_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.FIXED_THRESHOLD:
-            return self._fixed_threshold_offer(utility_fn, issues)
-        elif self.type == PolicyType.TIT_FOR_TAT:
-            return self._tit_for_tat_offer(round_num, history, utility_fn, issues)
-        elif self.type == PolicyType.BOULWARE:
-            return self._boulware_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.CONCEDER:
-            return self._conceder_offer(round_num, utility_fn, issues)
-        elif self.type == PolicyType.ADAPTIVE:
-            return self._adaptive_offer(round_num, history, utility_fn, issues, rng=rng)
-        else:
-            return self._default_offer(utility_fn, issues)
-=======
-    def make_offer(self, round_num: int, history: List['Offer'], utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         dispatch_map = {
             PolicyType.LINEAR_CONCESSION: partial(self._linear_concession_offer, round_num, utility_fn, issues),
             PolicyType.FIXED_THRESHOLD: partial(self._fixed_threshold_offer, utility_fn, issues),
             PolicyType.TIT_FOR_TAT: partial(self._tit_for_tat_offer, round_num, history, utility_fn, issues),
             PolicyType.BOULWARE: partial(self._boulware_offer, round_num, utility_fn, issues),
             PolicyType.CONCEDER: partial(self._conceder_offer, round_num, utility_fn, issues),
-            PolicyType.ADAPTIVE: partial(self._adaptive_offer, round_num, history, utility_fn, issues),
+            PolicyType.ADAPTIVE: partial(self._adaptive_offer, round_num, history, utility_fn, issues, rng=rng),
         }
 
         handler = dispatch_map.get(self.type)
         if handler is None:
             raise ValueError(f"Unsupported policy type: {self.type}")
         return handler()
->>>>>>> 269a006a588c47aba471e15d069bc22808545bbe
 
     def _linear_concession_offer(self, round_num: int, utility_fn: UtilityFunction, issues: List[Issue]) -> Dict[str, float]:
         concession_factor = min(1.0, round_num * self.params.concession_rate)

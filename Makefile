@@ -136,7 +136,7 @@ cli:
 
 web:
 	@echo "$(GREEN)Starting web interface on http://localhost:$(PORT)$(NC)"
-	streamlit run web_interface.py --server.port=$(PORT)
+	$(PYTHON) -m streamlit run web_interface.py --server.port=$(PORT)
 
 api:
 	@echo "$(GREEN)Starting API server on http://localhost:8000$(NC)"
